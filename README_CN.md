@@ -1,3 +1,5 @@
+> **0.1.0 NAS fork:** close all Cursor windows and use this fork's installer `update` so the local access protocol and extension upgrade together. See [DEVELOPMENT.md](DEVELOPMENT.md).
+
 > **fanny7d 二开分支**：保留上游 AGPL-3.0-or-later 许可，包含 Cursor 3.25.9 / NAS BYOK 兼容修复。构建、安装与二开说明见 [DEVELOPMENT.md](DEVELOPMENT.md)，通用配置见 [examples/providers.nas.example.json](examples/providers.nas.example.json)。
 
 <p align="center">

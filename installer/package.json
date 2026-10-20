@@ -1,6 +1,6 @@
 {
-  "name": "@cometix/ccursor",
-  "version": "0.0.15",
+  "name": "@fanny7d/ccursor",
+  "version": "0.1.0",
   "description": "Cursor++ BYOK Installer — Bring Your Own Key for Cursor IDE",
   "type": "module",
   "bin": {
@@ -10,7 +10,8 @@
     "build": "node esbuild.js",
     "build:vsix": "node src/build-vsix.js",
     "build:all": "npm run build:vsix && npm run build",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "package:artifacts": "node src/package-artifacts.js"
   },
   "files": [
     "dist/",
@@ -24,10 +25,7 @@
   ],
   "author": "CometixSpace",
   "license": "AGPL-3.0-or-later",
-  "private": false,
-  "publishConfig": {
-    "access": "public"
-  },
+  "private": true,
   "engines": {
     "node": ">=18.0.0"
   },
@@ -38,5 +36,13 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fanny7d/CCursor.git",
+    "directory": "installer"
+  },
+  "allowScripts": {
+    "esbuild@0.28.0": true
   }
 }

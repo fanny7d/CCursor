@@ -2,8 +2,8 @@
   "publisher": "cometix-space",
   "name": "cursor2plus",
   "displayName": "Cursor++",
-  "version": "0.0.15",
-  "description": "Cursor++ BYOK Extension — Bring Your Own Key for Cursor IDE",
+  "version": "0.1.0",
+  "description": "Cursor++ BYOK Extension \u2014 Bring Your Own Key for Cursor IDE",
   "icon": "resources/icon.png",
   "main": "./dist/extension.js",
   "extensionKind": [
@@ -11,7 +11,8 @@
   ],
   "extensionDependencies": [],
   "engines": {
-    "vscode": "^1.100.0"
+    "vscode": "^1.100.0",
+    "node": ">=24.0.0"
   },
   "activationEvents": [
     "*"
@@ -138,5 +139,11 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
-  "license": "AGPL-3.0-or-later"
+  "license": "AGPL-3.0-or-later",
+  "packageManager": "pnpm@11.22.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fanny7d/CCursor.git",
+    "directory": "Cursor++"
+  }
 }

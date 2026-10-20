@@ -11,3 +11,10 @@ cursor.db*
 *.key
 /artifacts/
 /verification/
+
+# Private local access and installation journals
+local-access.json
+.ccursor-installation.json
+.ccursor-transaction.json
+*.backup-byok-*
+.ci-sqlite/

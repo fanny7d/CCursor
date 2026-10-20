@@ -11,24 +11,32 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     env:
-      CURSOR_APP_ROOT: /tmp/ccursor-test-runtime
+      CURSOR_APP_ROOT: ${{ github.workspace }}/.ci-sqlite
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24'
-      - uses: pnpm/action-setup@v4
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
-          version: '11'
+          version: 11.22.0
       - name: Install extension dependencies
         working-directory: Cursor++
         run: pnpm install --frozen-lockfile
       - name: Prepare real SQLite module for headless tests
         run: |
-          mkdir -p "$CURSOR_APP_ROOT"
+          node -e "require('fs').mkdirSync(process.env.CURSOR_APP_ROOT,{recursive:true})"
           npm install --prefix "$CURSOR_APP_ROOT" --package-lock=false --no-audit --no-fund @vscode/sqlite3@5.1.12-vscode
       - name: Test extension server
         working-directory: Cursor++
@@ -42,9 +50,12 @@ jobs:
       - name: Typecheck, lint and package
         working-directory: installer
         run: npm run build:all
-      - uses: actions/upload-artifact@v4
+      - name: Package artifacts and checksums
+        working-directory: installer
+        run: npm run package:artifacts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cursor2plus-development-vsix
-          path: installer/vsix/*.vsix
+          name: cursor2plus-${{ runner.os }}
+          path: artifacts/*
           if-no-files-found: error
           retention-days: 14

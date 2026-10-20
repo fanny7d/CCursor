@@ -1,3 +1,12 @@
+const { execFileSync } = require("child_process");
+const extensionVersion = require("./package.json").version;
+let buildRevision = process.env.GITHUB_SHA || "unknown";
+if (buildRevision === "unknown") {
+  try {
+    buildRevision = execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim();
+    if (execFileSync("git", ["status", "--porcelain"], {encoding:"utf8"}).trim()) buildRevision += "-dirty";
+  } catch {}
+}
 const esbuild = require("esbuild");
 const { cpSync, mkdirSync, readdirSync } = require("fs");
 const { join } = require("path");
@@ -76,6 +85,8 @@ async function main() {
     jsx: "automatic",
     jsxImportSource: "hono/jsx",
     define: {
+      "process.env.CCURSOR_VERSION": JSON.stringify(extensionVersion),
+      "process.env.CCURSOR_BUILD_SHA": JSON.stringify(buildRevision),
       "import.meta.url": "undefined",
       __HUB_URL__: JSON.stringify(HUB_URL),
     },

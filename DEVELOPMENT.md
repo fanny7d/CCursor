@@ -2,7 +2,7 @@
 
 本仓库基于 [CometixSpace/CCursor](https://github.com/CometixSpace/CCursor) 的
 `fcac85db793fc2c8cda3318b96ec5a41c24f5e26`，保留上游历史及
-AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`。
+AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`，fork 版本 `0.1.0`。
 
 ## 已包含的改动
 
@@ -15,6 +15,10 @@ AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`。
 - 通用 NAS / gpt-6-luna Max 示例；密钥和私人部署信息不在仓库中。
 - 安装保留用户配置，兼容性检查失败退出非零；VSIX 验证并暂存后替换。
 - 私有配置权限保护、跨分片工具调用兼容及 fork 独立更新说明。
+- 四种 SDK 的取消传播、真实 HTTP 断流与 ConnectRPC 生命周期保护。
+- loopback、Host / Origin 与本地凭据保护，renderer / Agent / SSE 同步适配。
+- 完整安装准备、提交回滚和中断恢复，备份绑定 Cursor 版本及构建摘要。
+- 脱敏诊断、上游错误分类、截断提示及参数覆盖修复。
 
 本轮优化与后续验收计划见 [`ROADMAP.md`](ROADMAP.md)。
 
@@ -33,8 +37,9 @@ AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`。
 
 ## 构建和检查
 
-验证环境：macOS Apple Silicon、Cursor 3.25.9、Node.js 24、pnpm 11。
-其他 Cursor 版本、Windows、Linux、Remote SSH 需要另行验收。
+固定工具链：Node.js 24.22.0（`.nvmrc` / `.node-version`）、pnpm 11.22.0。
+本机也用 Node.js 26.7.0 验证。CI 覆盖 Linux、macOS、Windows 的源码与原生模块测试；
+实际 Cursor GUI 的基线为 macOS Apple Silicon / Cursor 3.25.9，其他版本和 Remote SSH 需另行验收。
 
 ```bash
 git clone --branch fanny7d/cursor-3259-nas https://github.com/fanny7d/CCursor.git
@@ -50,13 +55,14 @@ npm run build:all
 node dist/cli.cjs check
 ```
 
-产物为 `Cursor++/cursor2plus-0.0.15.vsix`、`installer/vsix/` 和 `installer/dist/`。
+产物为 `Cursor++/cursor2plus-0.1.0.vsix`、`installer/vsix/` 和 `installer/dist/`。
 由源码构建，不提交到 Git，也不发布到上游 npm 命名空间。
-GitHub Actions 自动运行 Server／安装器测试、类型检查、lint 和打包，并保留 VSIX 构建产物。
+GitHub Actions 自动运行 Server／安装器测试、类型检查、lint 和打包，并保留 VSIX、npm 安装包及 `SHA256SUMS`。
 
 数据库测试使用真实 `@vscode/sqlite3`，默认从已安装的 Cursor 加载。
 无 Cursor 的 CI 在临时目录中编译与验收环境相同的 `5.1.12-vscode`，通过现有
 `CURSOR_APP_ROOT` 环境变量指定模块目录；没有替换数据库实现或跳过数据库测试。
+全套测试通过 globalSetup 将 `CCURSOR_DATA_DIR` 指向临时目录，生产模块加载前即隔离持久化路径。
 本地无 Cursor 时也可参照 `.github/workflows/ci.yml` 准备这个临时依赖。
 
 ## 安装与回滚
@@ -78,10 +84,30 @@ node dist/cli.cjs uninstall
 上游 `npx @cometix/ccursor install` 安装的是上游版本。本 fork 使用本地构建产物。
 完整安装时重复执行 `install` 仍直接返回；修改扩展源码后，重新构建并运行 `update`
 以更新扩展。`update` 保留已有路由和服务商配置，不先执行卸载。
-补丁与扩展完整事务、跨 Cursor 版本备份校验仍见 ROADMAP，应用与配置备份仍需保留。
+安装器先在临时副本准备全部变更，再提交；任何步骤失败时恢复本次变更。
+备份附带 Cursor 版本、vendor build 及 SHA-256；旧版无元数据备份仅在原始 product 备份能证明同一 vendor build 时接纳。
+不匹配或校验失败时拒绝覆盖。整应用与配置备份仍需保留。
+
+0.1.0 的本地访问凭据协议要求扩展与应用补丁同步更新；必须关闭所有 Cursor 窗口后运行 `update`。
+仅替换 VSIX 会导致旧客户端缺少凭据，出现 401。`local-access.json` 首次启动时创建；POSIX 使用 0600，Windows 沿用用户目录 ACL，勿加入 Git。
+安装器保留已有 providers / routes 和 Max；本地访问凭据不会替换 NAS API Key。
+
+```bash
+# 只读脱敏诊断（不输出私有地址、密钥或聊天内容）
+node dist/cli.cjs doctor
+node dist/cli.cjs doctor --output /path/to/new-diagnostic.json
+# 安装进程异常退出后，保持恢复材料，关闭 Cursor 再执行：
+node dist/cli.cjs recover
+```
+
+恢复日志存在时新安装会拒绝继续。`recover` 从原始快照恢复，不运行新补丁。
+单独的 `local-mode` / `local-mode-off` 仍是独立工具，不纳入主安装事务；启用后应先执行 `local-mode-off` 再卸载主补丁。
 
 开发分支不轮询上游 npm 更新，以免上游安装器覆盖本 fork 的修复。
-后续更新从本仓库获取源码并构建；尚未提供独立发布通道。
+后续更新从本仓库获取源码并构建。`npm run package:artifacts` 生成 VSIX、
+`@fanny7d/ccursor` 的本地 `.tgz` 及校验文件；包设为 private，不发布到 npm。
+推送匹配版本的 `fork-v*` tag 会触发独立 GitHub Release workflow；不会触发上游 npm 更新。
+修改注入协议时须同步更新 marker 及客户端兼容／升级测试。
 
 ## NAS 与 Max
 
@@ -101,8 +127,10 @@ api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
 
 ## 验收边界
 
-真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
+0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
 见 [`LOCAL_NAS_ACCEPTANCE.md`](LOCAL_NAS_ACCEPTANCE.md)。
+0.1.0 已在真实应用文件副本完成升级／卸载验证，并有本地 HTTP / 协议集成测试；
+本轮没有替换当前运行版本，不能把它当作 0.1.0 GUI 已验收的证据。
 私人地址、密钥、完整日志和聊天截图不随源码发布。
 独立 Codex 扩展已卸载，Cursor++ 不依赖它；历史 Codex 兼容脚本未纳入本 fork。
 
