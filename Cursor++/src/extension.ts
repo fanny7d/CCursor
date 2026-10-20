@@ -3,6 +3,7 @@ import * as http from 'node:http'
 import * as vscode from 'vscode'
 import { bumpRefreshSignal, pushRoutesUpdate, startServer, stopServer } from './server'
 import { getServerConfig } from './server/config'
+import { readLocalAccessToken } from './server/config/localAccess'
 import { getLogsDir, getProvidersFilePath, getSessionLogFilePath } from './server/config/paths'
 import { ensureProvidersFile, onProvidersChange, startProvidersWatcher, stopProvidersWatcher } from './server/config/providersStore'
 import { ensureRoutesFile, onRoutesChange, startRoutesWatcher, stopRoutesWatcher, toggleByokMode } from './server/config/routesStore'
@@ -183,7 +184,12 @@ let takeoverInProgress = false
 function connectLogStream(port: number, windowId: number) {
   disconnectLogStream()
 
-  const req = http.get(`http://127.0.0.1:${port}/byok/log-stream?windowId=${windowId}`, (res) => {
+  let accessToken: string | undefined
+  try {
+    accessToken = readLocalAccessToken()
+  }
+  catch { /* server may still be starting */ }
+  const req = http.get(`http://127.0.0.1:${port}/byok/log-stream?windowId=${windowId}`, { headers: accessToken ? { 'x-ccursor-token': accessToken } : {} }, (res) => {
     let buf = ''
     res.on('data', (chunk: Buffer) => {
       buf += chunk.toString()

@@ -8,12 +8,16 @@ import cors from '@fastify/cors'
  * 在 extension host 进程内运行，通过 startServer/stopServer 管理生命周期。
  */
 import Fastify from 'fastify'
+import { ensureLocalAccessToken } from './config/localAccess'
 import { ensureProvidersFile } from './config/providersStore'
 import { ensureRoutesFile, loadRoutes, toggleByokMode } from './config/routesStore'
 import { closeAgentDatabase, initDatabase } from './database/sqlite'
+import { closeAllSessions } from './handlers/agent/session'
+import { isLoopbackHost, isRendererOrigin, registerLocalAccess } from './localAccess'
 import { enterWindowContext, logger, setLogBroadcast, setLogPush, setLogSubscriberCheck } from './logger'
 import { initRuntimeConfig } from './runtime-config'
 import routes from './services'
+import { upstreamDiagnostics } from './upstreamDiagnostics'
 
 const RE_CONNECT_RPC_PATH = /\/([^/]+)\/(\w+)$/
 
@@ -156,19 +160,24 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
     throw new Error('Server already running')
   }
 
+  if (!isLoopbackHost(opts.host || '127.0.0.1'))
+    throw new Error('Cursor++ local server must listen on a loopback address')
+  const accessToken = ensureLocalAccessToken()
   await initRuntimeConfig(opts)
   await ensureRoutesFile()
   await ensureProvidersFile()
   await initDatabase()
 
   const host = opts.host || '127.0.0.1'
-  const port = opts.port || 39831
+  const port = opts.port ?? 39831
 
   const server = Fastify({
     loggerInstance: logger,
     disableRequestLogging: true,
     bodyLimit: 10 * 1024 * 1024,
   })
+
+  registerLocalAccess(server, accessToken)
 
   // onRequest: 绑定 windowId 到 AsyncLocalStorage, 后续整个处理链
   // 的 logger 调用都会自动路由到正确的窗口 (per-window SSE 推送)
@@ -194,7 +203,7 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
   //      与扁平 REST 路径区分。
   //   3. 其他 REST 端点 → debug
   server.addHook('onResponse', (req, reply, done) => {
-    const url = req.url
+    const url = req.url.split('?')[0]
     const status = reply.statusCode
     const rt = reply.elapsedTime?.toFixed(0) ?? '?'
 
@@ -218,7 +227,7 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
     done()
   })
 
-  await server.register(cors, { origin: true })
+  await server.register(cors, { origin: (origin, cb) => cb(null, isRendererOrigin(origin)) })
   await server.register(fastifyConnectPlugin, { routes })
 
   // ── SSE 日志流 + 窗口注册 ──
@@ -238,7 +247,6 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
     'X-Accel-Buffering': 'no',
   }
 
@@ -253,12 +261,12 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
       logStreams.set(wid, new Set())
     logStreams.get(wid)!.add(reply)
 
-    reply.raw.writeHead(200, sseHeaders)
+    reply.raw.writeHead(200, { ...sseHeaders, ...(isRendererOrigin(req.headers.origin) ? { 'Access-Control-Allow-Origin': req.headers.origin } : {}) })
     reply.raw.write(`data: ${JSON.stringify(`[INFO] log stream connected (windowId=${wid})`)}\n\n`)
     // hijack: 不让 Fastify 关闭 response
     reply.hijack()
 
-    req.raw.on('close', () => {
+    reply.raw.on('close', () => {
       logStreams.get(wid)?.delete(reply)
     })
   })
@@ -268,7 +276,7 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
   // 因为 providers / routes 变更是全局事件, 每个窗口都需要刷新。
   server.get('/byok/events', async (req, reply) => {
     refreshEventStreams.add(reply)
-    reply.raw.writeHead(200, sseHeaders)
+    reply.raw.writeHead(200, { ...sseHeaders, ...(isRendererOrigin(req.headers.origin) ? { 'Access-Control-Allow-Origin': req.headers.origin } : {}) })
     reply.raw.write(`: connected\n\n`)
     // 立即推送当前 REST redirect 列表 — inject-patch 初始只含 BASE,
     // 需要 server 就绪后推送完整列表才能拦截 BYOK 路径
@@ -276,7 +284,7 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
     reply.raw.write(`event: routes\ndata: ${JSON.stringify(currentRestPaths)}\n\n`)
     reply.hijack()
 
-    req.raw.on('close', () => {
+    reply.raw.on('close', () => {
       refreshEventStreams.delete(reply)
     })
   })
@@ -294,7 +302,8 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
   })
 
   // Fake auth endpoints
-  server.get('/health', async () => ({ ok: true, mode: 'byok' }))
+  server.get('/health', async () => ({ ok: true, mode: 'byok', version: process.env.CCURSOR_VERSION || 'development', build: process.env.CCURSOR_BUILD_SHA || 'development', localAccessProtocol: 1 }))
+  server.get('/byok/diagnostics', async () => upstreamDiagnostics())
 
   server.get('/auth/full_stripe_profile', async () => ({
     membershipType: 'ultra',
@@ -346,7 +355,7 @@ export async function startServer(opts: StartServerOptions): Promise<{ host: str
   app = server
   logger.info(`[SRV] listening at http://${host}:${port}`)
 
-  return { host, port }
+  return { host, port: (server.server.address() as { port: number }).port }
 }
 
 export function broadcastShutdown(): void {
@@ -354,14 +363,16 @@ export function broadcastShutdown(): void {
   for (const [, streams] of logStreams) {
     for (const reply of streams) {
       try {
-        reply.raw.write(msg)
+        if (!reply.raw.destroyed && !reply.raw.writableEnded)
+          reply.raw.write(msg)
       }
       catch { /* noop */ }
     }
   }
   for (const reply of refreshEventStreams) {
     try {
-      reply.raw.write(msg)
+      if (!reply.raw.destroyed && !reply.raw.writableEnded)
+        reply.raw.write(msg)
     }
     catch { /* noop */ }
   }
@@ -374,6 +385,22 @@ export async function stopServer(): Promise<void> {
   const server = app
   app = null
   broadcastShutdown()
+  closeAllSessions()
+  for (const streams of logStreams.values()) {
+    for (const reply of streams) {
+      if (!reply.raw.destroyed && !reply.raw.writableEnded)
+        reply.raw.end()
+    }
+  }
+  for (const reply of refreshEventStreams) {
+    if (!reply.raw.destroyed && !reply.raw.writableEnded)
+      reply.raw.end()
+  }
+  logStreams.clear()
+  refreshEventStreams.clear()
+  if (refreshDebounceTimer)
+    clearTimeout(refreshDebounceTimer)
+  refreshDebounceTimer = null
   try {
     await server.close()
   }

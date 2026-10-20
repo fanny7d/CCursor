@@ -9,17 +9,17 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { CCURSOR_DIR_NAME, ROUTES_FILE_NAME, DEFAULT_ROUTES } from './defaults.js';
 
-export const CCURSOR_DIR = join(homedir(), CCURSOR_DIR_NAME);
+export const CCURSOR_DIR = process.env.CCURSOR_DATA_DIR || join(homedir(), CCURSOR_DIR_NAME);
 export const ROUTES_PATH = join(CCURSOR_DIR, ROUTES_FILE_NAME);
 
 /**
  * 加载 routes.json — 不存在或损坏时返回内置默认值。
  * 不在此处自动写入文件;首次释放由 install 流程统一处理。
  */
-export function loadRoutes() {
-  if (!existsSync(ROUTES_PATH)) return cloneDefaults();
+export function loadRoutes(path = ROUTES_PATH) {
+  if (!existsSync(path)) return cloneDefaults();
   try {
-    const parsed = JSON.parse(readFileSync(ROUTES_PATH, 'utf-8'));
+    const parsed = JSON.parse(readFileSync(path, 'utf-8'));
     return mergeWithDefaults(parsed);
   } catch {
     return cloneDefaults();

@@ -13,8 +13,8 @@ import {
   ROUTES_FILE_NAME,
 } from './defaults.js';
 
-export const HTTP11_ROUTER_VERSION_MARKER = '__byokHttp11RouterV2';
-export const HTTP11_ROUTER_SOURCE_MARKER = 'BYOK-HTTP11-ROUTER-V2';
+export const HTTP11_ROUTER_VERSION_MARKER = '__byokHttp11RouterV3';
+export const HTTP11_ROUTER_SOURCE_MARKER = 'BYOK-HTTP11-ROUTER-V3';
 
 /**
  * @param {{ guardMarker: string, processLabel: string }} options
@@ -32,13 +32,13 @@ export function buildNodeHttp11RouterPayload({ guardMarker, processLabel }) {
 (function(){
   var VERSION_MARKER=${versionMarker},GUARD_MARKER=${guard},PROCESS_LABEL=${label};
   if(globalThis[VERSION_MARKER]){globalThis[GUARD_MARKER]=true;return;}
-  globalThis[VERSION_MARKER]=true;globalThis[GUARD_MARKER]=true;
+  globalThis[VERSION_MARKER]=true;globalThis.__byokHttp11RouterV2=true;globalThis[GUARD_MARKER]=true;
   var _http=require("http"),_https=require("https"),_fs=require("fs"),_path=require("path"),_os=require("os"),_module=require("module");
   var _proxyHttpRequest=_http.request,_proxyHttpsRequest=_https.request;
   var _proxyHttpGet=_http.get,_proxyHttpsGet=_https.get;
   var _directHttpOwner=_http.__vscodeOriginal||_http;
   var _directHttpRequest=(_http.__vscodeOriginal&&_http.__vscodeOriginal.request)||_proxyHttpRequest;
-  var ROUTES_PATH=_path.join(_os.homedir(),${ccursorDir},${routesFile});
+  var DATA_DIR=process.env.CCURSOR_DATA_DIR||_path.join(_os.homedir(),${ccursorDir});var ROUTES_PATH=_path.join(DATA_DIR,${routesFile});
   var FALLBACK_HOST=${fallbackHost},FALLBACK_PORT=${fallbackPort};
   var _title=String(process.env.VSCODE_PROCESS_TITLE||""),_widMatch=_title.match(/\\[(\\d+)-\\d+\\]/),WINDOW_ID=_widMatch?_widMatch[1]:null;
   var state={host:FALLBACK_HOST,port:FALLBACK_PORT,base:"http://"+FALLBACK_HOST+":"+FALLBACK_PORT,svcSet:new Set(),methodSet:new Set(),restSet:new Set(),ruleCount:0,restCount:0};
@@ -75,7 +75,7 @@ export function buildNodeHttp11RouterPayload({ guardMarker, processLabel }) {
   function cloneHeaders(headers){var result={};if(!headers)return result;try{if(typeof Headers!=="undefined"&&headers instanceof Headers){headers.forEach(function(value,key){result[key]=value;});return result;}}catch(e){}
     if(Array.isArray(headers)){if(headers.length&&Array.isArray(headers[0])){for(var i=0;i<headers.length;i++)if(headers[i]&&headers[i].length>=2)result[String(headers[i][0])]=headers[i][1];}else{for(var j=0;j+1<headers.length;j+=2)result[String(headers[j])]=headers[j+1];}return result;}
     if(typeof headers==="object")for(var key in headers)if(Object.prototype.hasOwnProperty.call(headers,key))result[key]=headers[key];return result;}
-  function routeHeaders(headers){var result=cloneHeaders(headers),hasWid=false;for(var key in result){var lower=key.toLowerCase();if(lower==="host"||lower===":authority")delete result[key];else if(lower==="x-client-wid")hasWid=true;}if(WINDOW_ID&&!hasWid)result["x-client-wid"]=WINDOW_ID;result["x-byok-route-source"]=PROCESS_LABEL;return result;}
+  function routeHeaders(headers){var result=cloneHeaders(headers),hasWid=false;for(var key in result){var lower=key.toLowerCase();if(lower==="host"||lower===":authority")delete result[key];else if(lower==="x-client-wid")hasWid=true;}if(WINDOW_ID&&!hasWid)result["x-client-wid"]=WINDOW_ID;result["x-byok-route-source"]=PROCESS_LABEL;try{var auth=JSON.parse(_fs.readFileSync(_path.join(DATA_DIR,"local-access.json"),"utf-8"));if(typeof auth.token==="string")result["x-ccursor-token"]=auth.token;}catch(e){}return result;}
   function localOptions(options){var result=Object.assign({},options||{});result.headers=routeHeaders(result.headers);result.agent=false;delete result.host;delete result.servername;delete result.createConnection;delete result.ALPNProtocols;return result;}
   function rewriteOptions(options){var result=localOptions(options);result.protocol="http:";result.hostname=state.host;result.port=state.port;return result;}
   function rewriteUrl(parsed){var path=parsed.path||"/";return state.base+(path.charAt(0)==="/"?path:"/"+path);}

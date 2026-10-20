@@ -7,15 +7,15 @@ import { checkAlwaysLocalPatch } from './patch-always-local.js';
 import { checkAgentHostPatch } from './patch-agent-host.js';
 import { checkProxy39Patch, needsProxy39Patch } from './patch-proxy-39.js';
 import { checkAgentHostGatePatch } from './patch-agent-host-gate.js';
-import { findTarget, isInjectPatched } from './patch-inject.js';
+import { findTarget, isInjectPatched, prepareRendererSource } from './patch-inject.js';
 import { checkRuntimeCompat } from './patch-runtime-compat.js';
 
 const ok = s => `\x1b[32m✓ ${s}\x1b[0m`;
 const fail = s => `\x1b[31m✗ ${s}\x1b[0m`;
 const info = s => `\x1b[34m[>]\x1b[0m ${s}`;
 
-export async function check() {
-  const { paths, diagnostic } = findCursorPathsDetailed();
+export async function check(overridePaths) {
+  const { paths, diagnostic } = overridePaths?.appRoot ? { paths: overridePaths, diagnostic: {} } : findCursorPathsDetailed();
   if (!paths) {
     console.log(fail('Cursor installation not found'));
     console.log();
@@ -36,7 +36,7 @@ export async function check() {
       if (label === 'glass') console.log(info('Glass workbench not found (pre-3.8, OK)'));
       continue;
     }
-    const wb = readFileSync(file, 'utf-8');
+    const wb = prepareRendererSource(readFileSync(file, 'utf-8'));
     if (isInjectPatched(wb)) {
       console.log(ok(`Renderer hook (${label}): payload + active transport call site`));
       continue;
