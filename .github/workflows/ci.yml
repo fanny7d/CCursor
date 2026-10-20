@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      CURSOR_APP_ROOT: ${{ runner.temp }}/ccursor-test-runtime
+      CURSOR_APP_ROOT: /tmp/ccursor-test-runtime
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

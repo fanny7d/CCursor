@@ -18,11 +18,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-const CURSOR_APP_PATH = '/Applications/Cursor.app/Contents/Resources/app/'
+const CURSOR_APP_PATH = process.env.CURSOR_APP_ROOT || '/Applications/Cursor.app/Contents/Resources/app'
+const CURSOR_PACKAGE_PATH = join(CURSOR_APP_PATH, 'package.json')
 
 const fs = require('node:fs') as { existsSync: typeof ExistsSync }
 
-const cursorAppExists = fs.existsSync(CURSOR_APP_PATH)
+const cursorAppExists = fs.existsSync(CURSOR_PACKAGE_PATH)
 
 describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () => {
   let sqlite3: any
@@ -50,7 +51,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 1. 加载验证 ───
 
   it('loads via createRequire from Cursor app path', () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     expect(sqlite3).toBeTruthy()
@@ -60,7 +61,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   })
 
   it('exposes SQLite version constants', () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     expect(sqlite3.VERSION).toMatch(/^\d+\.\d+\.\d+/)
@@ -72,7 +73,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 2. 基础读写 ───
 
   it('opens, writes, reads via async API', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     const result = await new Promise<any[]>((resolve, reject) => {
@@ -100,7 +101,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   })
 
   it('supports prepared statements with parameter binding', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     const result = await new Promise<any>((resolve, reject) => {
@@ -127,7 +128,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 3. WAL 模式验证 ───
 
   it('supports WAL journal mode', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     const result = await new Promise<any>((resolve, reject) => {
@@ -150,7 +151,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   })
 
   it('supports busy_timeout pragma', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     const result = await new Promise<any>((resolve, reject) => {
@@ -175,7 +176,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 4. 跨进程并发 ───
 
   it('handles concurrent connections to same DB (WAL mode)', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     // 1. 第一个连接初始化 + WAL
@@ -235,7 +236,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 5. 资源清理 ───
 
   it('properly closes and releases file handles', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     // 创建 → 关闭 → 再次打开 → 验证可用
@@ -271,7 +272,7 @@ describe.skipIf(!cursorAppExists)('@vscode/sqlite3 internal module probe', () =>
   // ─── 6. 错误处理 ───
 
   it('handles errors via callbacks (not exceptions)', async () => {
-    const cursorRequire = createRequire(`${CURSOR_APP_PATH}package.json`)
+    const cursorRequire = createRequire(CURSOR_PACKAGE_PATH)
     sqlite3 = cursorRequire('@vscode/sqlite3')
 
     const error = await new Promise<Error | null>((resolve) => {
