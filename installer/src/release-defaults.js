@@ -2,16 +2,14 @@
  * Install 时释放默认资源到 ~/.ccursor/
  *
  * 释放内容:
- *   - routes.json         ← DEFAULT_ROUTES (强制覆盖:白名单由开发者编排,非用户数据)
+ *   - routes.json         ← DEFAULT_ROUTES (keep-if-exists:保留用户路由与 BYOK 偏好)
  *   - providers.json      ← DEFAULT_PROVIDERS (keep-if-exists:用户 API Key 不能丢)
  *   - models-catalog.json ← 从 installer 自带的 assets 复制 (models.dev 快照,强制覆盖)
  *
- * routes.json 强制覆盖的理由:
- *   redirect 数组由我们主动编排,用户不应手改;每次 install 都会拿到最新白名单,
- *   保证新版扩展增删的方法/REST 路径能立即生效。用户的 byokMode / host / port 偏好
- *   由运行时切换 (toggleByokMode / 设置面板) 维护,install 是显式动作,重置回默认可接受。
+ * 已有 routes.json 原样保留;运行时 routesStore 负责合并默认值。
+ * 安装或升级不能重置用户的 byokMode / host / port / redirect。
  *
- * byokMode 自动检测:
+ * 首次创建 routes.json 时自动检测 byokMode:
  *   读取 Cursor 的 state.vscdb, 如果 cursorAuth/accessToken 不存在或 onboarding
  *   未完成 → byokMode: 0 (OFF), 允许用户先完成登录/引导再手动开启 BYOK。
  *   已登录且引导完成 → byokMode: 1 (ON), 直接进入 BYOK 模式。
@@ -74,8 +72,8 @@ function detectByokMode(log) {
   }
 }
 
-function release(filename, content, log, { force = false } = {}) {
-  const dest = join(CCURSOR_DIR, filename);
+function release(configDir, filename, content, log, { force = false } = {}) {
+  const dest = join(configDir, filename);
   if (!force && existsSync(dest)) {
     log?.(`  ${filename} already exists, keep`);
     return false;
@@ -100,8 +98,8 @@ function resolveAssetPath(filename) {
   return null;
 }
 
-function copyAsset(filename, log, { force = false } = {}) {
-  const dest = join(CCURSOR_DIR, filename);
+function copyAsset(configDir, filename, log, { force = false } = {}) {
+  const dest = join(configDir, filename);
   if (!force && existsSync(dest)) {
     log?.(`  ${filename} already exists, keep`);
     return false;
@@ -118,20 +116,24 @@ function copyAsset(filename, log, { force = false } = {}) {
   return true;
 }
 
-export function releaseDefaults(log) {
-  log?.('[defaults] Releasing to ~/.ccursor/...');
-  mkdirSync(CCURSOR_DIR, { recursive: true });
+export function releaseDefaults(log, { configDir = CCURSOR_DIR } = {}) {
+  log?.(`[defaults] Releasing to ${configDir}...`);
+  mkdirSync(configDir, { recursive: true });
 
-  const mode = detectByokMode(log);
-  const routes = {
-    ...DEFAULT_ROUTES,
-    byokMode: mode,
-    redirect: mode ? [...DEFAULT_REDIRECT] : [...BASE_REDIRECT],
-  };
-  release(ROUTES_FILE_NAME, routes, log, { force: true });
-  release(PROVIDERS_FILE_NAME, DEFAULT_PROVIDERS, log);
-  release(WEB_TOOLS_FILE_NAME, DEFAULT_WEB_TOOLS, log);
-  copyAsset(MODELS_CATALOG_FILE_NAME, log, { force: true });
+  if (existsSync(join(configDir, ROUTES_FILE_NAME))) {
+    log?.(`  ${ROUTES_FILE_NAME} already exists, keep`);
+  } else {
+    const mode = detectByokMode(log);
+    const routes = {
+      ...DEFAULT_ROUTES,
+      byokMode: mode,
+      redirect: mode ? [...DEFAULT_REDIRECT] : [...BASE_REDIRECT],
+    };
+    release(configDir, ROUTES_FILE_NAME, routes, log);
+  }
+  release(configDir, PROVIDERS_FILE_NAME, DEFAULT_PROVIDERS, log);
+  release(configDir, WEB_TOOLS_FILE_NAME, DEFAULT_WEB_TOOLS, log);
+  copyAsset(configDir, MODELS_CATALOG_FILE_NAME, log, { force: true });
 
   log?.('[defaults] Done');
 }

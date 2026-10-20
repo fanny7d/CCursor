@@ -3,9 +3,9 @@
  *
  * 使用 fflate (纯 JS, WASM 级性能) 解压，比 adm-zip 快 10x+。
  */
-import { unzipSync } from 'fflate';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
+import { existsSync, readdirSync, rmSync } from 'fs';
+import { join } from 'path';
+import { installExtensionArchive } from './extension-archive.js';
 const __pkgRoot = join(__dirname, '..');
 
 export function installExtension(paths, log) {
@@ -17,29 +17,14 @@ export function installExtension(paths, log) {
   if (vsixFiles.length === 0) {
     throw new Error('No .vsix file found in vsix/ directory. Run "npm run build" first.');
   }
+  if (vsixFiles.length !== 1) {
+    throw new Error('Multiple .vsix files found. Rebuild to select a single extension archive.');
+  }
 
   const vsixPath = join(vsixDir, vsixFiles[0]);
   const targetDir = paths.cursor2plusDir;
 
-  if (existsSync(targetDir)) {
-    rmSync(targetDir, { recursive: true, force: true });
-  }
-  mkdirSync(targetDir, { recursive: true });
-
-  const zipData = new Uint8Array(readFileSync(vsixPath));
-  const files = unzipSync(zipData);
-  const prefix = 'extension/';
-  let count = 0;
-
-  for (const [name, data] of Object.entries(files)) {
-    if (!name.startsWith(prefix) || name.endsWith('/'))
-      continue;
-    const relPath = name.slice(prefix.length);
-    const destPath = join(targetDir, relPath);
-    mkdirSync(dirname(destPath), { recursive: true });
-    writeFileSync(destPath, data);
-    count++;
-  }
+  const count = installExtensionArchive(targetDir, vsixPath, log);
 
   log?.(`  Installed: ${targetDir} (${count} files)`);
   log?.(`  From: ${vsixFiles[0]}`);
@@ -56,17 +41,4 @@ export function removeExtension(paths, log) {
 
 export function isExtensionInstalled(paths) {
   return existsSync(join(paths.cursor2plusDir, 'package.json'));
-}
-
-function copyDirSync(src, dest) {
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src)) {
-    const srcPath = join(src, entry);
-    const destPath = join(dest, entry);
-    if (statSync(srcPath).isDirectory()) {
-      copyDirSync(srcPath, destPath);
-    } else {
-      copyFileSync(srcPath, destPath);
-    }
-  }
 }

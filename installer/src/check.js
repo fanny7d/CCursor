@@ -7,7 +7,7 @@ import { checkAlwaysLocalPatch } from './patch-always-local.js';
 import { checkAgentHostPatch } from './patch-agent-host.js';
 import { checkProxy39Patch, needsProxy39Patch } from './patch-proxy-39.js';
 import { checkAgentHostGatePatch } from './patch-agent-host-gate.js';
-import { isInjectPatched } from './patch-inject.js';
+import { findTarget, isInjectPatched } from './patch-inject.js';
 import { checkRuntimeCompat } from './patch-runtime-compat.js';
 
 const ok = s => `\x1b[32m✓ ${s}\x1b[0m`;
@@ -20,7 +20,7 @@ export async function check() {
     console.log(fail('Cursor installation not found'));
     console.log();
     console.log(formatDiagnostic(diagnostic));
-    return;
+    throw new Error('Cursor installation not found');
   }
 
   console.log(info(`Cursor: ${paths.appRoot}`));
@@ -30,16 +30,13 @@ export async function check() {
   try { checkRuntimeCompat(paths, s => console.log(info(s))); }
   catch (error) { console.log(fail(error.message)); allOk = false; }
 
-  // 1. Renderer hook anchor (inject patch) — desktop + glass
+  // 1. Renderer hook target (same AST matcher as the inject patch) — desktop + glass
   for (const [file, label] of [[paths.workbenchJs, 'desktop'], [paths.glassJs, 'glass']]) {
     if (!existsSync(file)) {
       if (label === 'glass') console.log(info('Glass workbench not found (pre-3.8, OK)'));
       continue;
     }
     const wb = readFileSync(file, 'utf-8');
-    // 与 patch-inject.js 的 ANCHORS 保持一致 —— 3.17.8 起模块注册键从
-    // "out-build/external/bufbuild/connect/callback-client.js" 缩短为
-    // "callback-client.js",只取文件名可同时命中新旧两种形态。
     if (isInjectPatched(wb)) {
       console.log(ok(`Renderer hook (${label}): payload + active transport call site`));
       continue;
@@ -49,15 +46,11 @@ export async function check() {
       allOk = false;
       continue;
     }
-    const anchors = [
-      'callback-client.js',
-      'promise-client.js',
-    ];
-    const found = anchors.find(a => wb.includes(a));
-    if (found) {
-      console.log(ok(`Inject anchor (${label}): "${found}"`));
-    } else {
-      console.log(fail(`Inject anchor (${label}) not found`));
+    try {
+      const target = findTarget(wb, s => console.log(info(s)));
+      console.log(ok(`Renderer hook target (${label}): function ${target.name}`));
+    } catch (error) {
+      console.log(fail(`Renderer hook target (${label}) not matchable: ${error.message}`));
       allOk = false;
     }
   }
@@ -73,6 +66,9 @@ export async function check() {
       console.log(fail('Sig bypass pattern not found'));
       allOk = false;
     }
+  } else {
+    console.log(fail('extensionHostProcess.js not found (required for signature patch)'));
+    allOk = false;
   }
 
   // 3. Legacy Agent process: executable HTTP/1.1 router + wait
@@ -111,5 +107,6 @@ export async function check() {
     console.log(ok('All patch targets matchable'));
   } else {
     console.log(fail('Some targets not matchable — install may fail'));
+    throw new Error('Some patch targets are not matchable');
   }
 }

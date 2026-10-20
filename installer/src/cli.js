@@ -16,9 +16,7 @@ import { patchLocalMode } from './patch-local-mode.js';
 import { restoreBackup } from './backup.js';
 
 async function update() {
-  await uninstall();
-  console.log('');
-  await install();
+  await install({ refreshExtension: true });
 }
 
 const command = process.argv[2];
@@ -65,7 +63,8 @@ ccursor — Cursor++ BYOK Installer
 Commands:
   install          Install Cursor++ extension and apply patches
   uninstall        Remove extension and restore all patches
-  update           Upgrade: uninstall then reinstall
+  update           Check compatibility and refresh the extension, preserving configuration
+  upgrade          Alias for update
   local-mode       Standalone tool: enable Cursor's built-in Local Agent mode
   local-mode-off   Standalone tool: disable Local Agent mode (restore originals)
   status           Check current installation status

@@ -23,7 +23,8 @@ import { getAgentHostBackupTargets, isAgentHostPatched, patchAgentHost } from '.
 import { patchKatex } from './patch-katex.js';
 import { patchProxy39, needsProxy39Patch, isProxy39Patched } from './patch-proxy-39.js';
 import { patchAgentHostGate, isAgentHostGateFullyPatched } from './patch-agent-host-gate.js';
-import { patchRuntimeCompat, isRuntimeCompatPatched, checkRuntimeCompat } from './patch-runtime-compat.js';
+import { patchRuntimeCompat, isRuntimeCompatPatched } from './patch-runtime-compat.js';
+import { check } from './check.js';
 // delete-fix 已移除 — 3.2.11 原生 tombstoneDeletedComposer 已覆盖
 import { releaseDefaults } from './release-defaults.js';
 
@@ -32,7 +33,7 @@ const info = msg => console.log(`\x1b[34m[>]\x1b[0m ${msg}`);
 const warn = msg => console.log(`\x1b[33m[!]\x1b[0m ${msg}`);
 const fail = msg => console.log(`\x1b[31m[X]\x1b[0m ${msg}`);
 
-export async function install() {
+export async function install({ refreshExtension = false } = {}) {
   info('Cursor++ BYOK Installer');
   console.log('');
 
@@ -47,7 +48,9 @@ export async function install() {
   }
   info(`Cursor: ${paths.appRoot}`);
   info(`Version: ${paths.cursorVersion}${paths.hasGlass ? ' (glass)' : ''}`);
-  checkRuntimeCompat(paths, info);
+  // Run supported compatibility checks before defaults, extension files or
+  // application bundles are changed. A failed check rejects the install.
+  await check();
 
   const extInstalled = isExtensionInstalled(paths);
   const desktopPatched = existsSync(paths.workbenchJs) && isInjectPatched(readFileSync(paths.workbenchJs, 'utf-8'));
@@ -62,15 +65,21 @@ export async function install() {
     || hasBackup(paths.alwaysLocalSingletonJs) || hasBackup(paths.extensionHostJs) || agentHostBackups;
 
   if (extInstalled && hookInjected && alPatched && agentHostPatched && proxy39Ok && agentGateOk && isRuntimeCompatPatched(paths)) {
+    if (refreshExtension) {
+      installExtension(paths, info);
+      ok('Extension refreshed; application patches and configuration preserved');
+      warn('Restart Cursor for changes to take effect.');
+      return;
+    }
     ok('Already fully installed');
-    info('To reinstall, run "ccursor uninstall" first');
+    info('To refresh the extension, run "ccursor update"');
     return;
   }
 
   if (hasBackups && !extInstalled) {
     warn('Found backup files from a previous installation');
     warn('Run "ccursor uninstall" to clean up before reinstalling');
-    return;
+    throw new Error('Existing backups require recovery before installing the missing extension');
   }
 
   console.log('');
@@ -103,5 +112,5 @@ export async function install() {
   console.log('');
   ok('Installation complete!');
   warn('Restart Cursor for changes to take effect.');
-  info('Uninstall: npx @cometix/ccursor uninstall');
+  info('Uninstall: node dist/cli.cjs uninstall');
 }
