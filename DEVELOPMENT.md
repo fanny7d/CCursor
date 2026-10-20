@@ -13,6 +13,10 @@ AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`。
 - 修正规则分类测试中的用户规则／工作区规则输入。
 - 安装前检查、状态检查、分组备份及逆序回滚。
 - 通用 NAS / gpt-6-luna Max 示例；密钥和私人部署信息不在仓库中。
+- 安装保留用户配置，兼容性检查失败退出非零；VSIX 验证并暂存后替换。
+- 私有配置权限保护、跨分片工具调用兼容及 fork 独立更新说明。
+
+本轮优化与后续验收计划见 [`ROADMAP.md`](ROADMAP.md)。
 
 ## 目录
 
@@ -63,6 +67,8 @@ GitHub Actions 自动运行 Server／安装器测试、类型检查、lint 和�
 cd installer
 node dist/cli.cjs check
 node dist/cli.cjs install
+# 更新本 fork 的构建产物（同样先关闭 Cursor 并执行 check）：
+node dist/cli.cjs update
 # 重启 Cursor 后：
 node dist/cli.cjs status
 # 需要恢复时，关闭 Cursor 后：
@@ -70,8 +76,12 @@ node dist/cli.cjs uninstall
 ```
 
 上游 `npx @cometix/ccursor install` 安装的是上游版本。本 fork 使用本地构建产物。
-完整安装时安装器直接返回；修改扩展源码后，需确认使用新构建的 VSIX，
-不能把重复执行 `install` 当作扩展版本已更新的证明。完整重装可能重写路由默认值，先保留配置。
+完整安装时重复执行 `install` 仍直接返回；修改扩展源码后，重新构建并运行 `update`
+以更新扩展。`update` 保留已有路由和服务商配置，不先执行卸载。
+补丁与扩展完整事务、跨 Cursor 版本备份校验仍见 ROADMAP，应用与配置备份仍需保留。
+
+开发分支不轮询上游 npm 更新，以免上游安装器覆盖本 fork 的修复。
+后续更新从本仓库获取源码并构建；尚未提供独立发布通道。
 
 ## NAS 与 Max
 
