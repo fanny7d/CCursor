@@ -18,3 +18,4 @@ local-access.json
 .ccursor-transaction.json
 *.backup-byok-*
 .ci-sqlite/
+/.github/toolchain/node_modules/

@@ -1,0 +1,8 @@
+{
+  "name": "ccursor-build-tools",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "pnpm": "11.22.0"
+  }
+}

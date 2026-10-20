@@ -38,6 +38,7 @@ AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`，f
 ## 构建和检查
 
 固定工具链：Node.js 24.22.0（`.nvmrc` / `.node-version`）、pnpm 11.22.0。
+CI 从 `.github/toolchain/package-lock.json` 校验并安装精确 pnpm 版本，禁用安装脚本，避免 bootstrap 自更新改变工具链。
 本机也用 Node.js 26.7.0 验证。CI 覆盖 Linux、macOS、Windows 的源码与原生模块测试；
 实际 Cursor GUI 的基线为 macOS Apple Silicon / Cursor 3.25.9，其他版本和 Remote SSH 需另行验收。
 
