@@ -15,6 +15,9 @@
  * 只通过 `ccursor local-mode` / `ccursor local-mode-off` 管理。
  */
 import { join } from 'path';
+import { rmSync } from 'fs';
+import { withInstallationTransaction } from './transaction.js';
+import { INSTALLATION_MANIFEST } from './installation-state.js';
 import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { restoreBackup } from './backup.js';
 import { removeExtension } from './extension-embed.js';
@@ -40,58 +43,61 @@ export async function uninstall() {
   }
   info(`Cursor: ${paths.appRoot}`);
 
-  let restored = 0;
-  const workbenchHtml = join(paths.appRoot, 'out', 'vs', 'code', 'electron-sandbox', 'workbench', 'workbench.html');
+  await withInstallationTransaction(paths, async (staged) => {
+    let restored = 0;
+    const workbenchHtml = join(staged.appRoot, 'out', 'vs', 'code', 'electron-sandbox', 'workbench', 'workbench.html');
 
-  const singletonJs = join(paths.appRoot, 'out', 'vs', 'code', 'electron-utility', 'alwaysLocalSingleton', 'alwaysLocalSingletonMain.js');
+    const singletonJs = join(staged.appRoot, 'out', 'vs', 'code', 'electron-utility', 'alwaysLocalSingleton', 'alwaysLocalSingletonMain.js');
 
-  restoreRuntimeCompat(paths, info);
+    restoreRuntimeCompat(staged, info);
 
-  // 0. 倒序恢复 agent-host-gate 组 (安装顺序最后 → 最先恢复)
-  info('Restoring agent-host-gate patches...');
-  for (const file of [paths.productJson, paths.workbenchJs, paths.glassJs]) {
-    if (restoreBackup(file, 'agent-host-gate', info)) restored++;
-  }
+    // 0. 倒序恢复 agent-host-gate 组 (安装顺序最后 → 最先恢复)
+    info('Restoring agent-host-gate patches...');
+    for (const file of [staged.productJson, staged.workbenchJs, staged.glassJs]) {
+      if (restoreBackup(file, 'agent-host-gate', info)) restored++;
+    }
 
-  // 1. 倒序恢复 katex 组
-  info('Restoring katex patches...');
-  for (const file of [paths.productJson, workbenchHtml]) {
-    if (restoreBackup(file, 'katex', info)) restored++;
-  }
+    // 1. 倒序恢复 katex 组
+    info('Restoring katex patches...');
+    for (const file of [staged.productJson, workbenchHtml]) {
+      if (restoreBackup(file, 'katex', info)) restored++;
+    }
 
-  // 2. 倒序恢复 Cursor 3.9 proxy sync 组
-  info('Restoring proxy-39 patches...');
-  for (const file of [paths.productJson, singletonJs]) {
-    if (restoreBackup(file, 'proxy-39', info)) restored++;
-  }
+    // 2. 倒序恢复 Cursor 3.9 proxy sync 组
+    info('Restoring proxy-39 patches...');
+    for (const file of [staged.productJson, singletonJs]) {
+      if (restoreBackup(file, 'proxy-39', info)) restored++;
+    }
 
-  // 3. 倒序恢复独立 Agent Host transport 组
-  info('Restoring agent-host patches...');
-  for (const file of [paths.productJson, ...getAgentHostBackupTargets(paths)]) {
-    if (restoreBackup(file, 'agent-host', info)) restored++;
-  }
+    // 3. 倒序恢复独立 Agent Host transport 组
+    info('Restoring agent-host patches...');
+    for (const file of [staged.productJson, ...getAgentHostBackupTargets(staged)]) {
+      if (restoreBackup(file, 'agent-host', info)) restored++;
+    }
 
-  // 4. 倒序恢复 always-local 组
-  info('Restoring always-local patches...');
-  for (const file of [paths.productJson, paths.extensionHostJs, paths.alwaysLocalMain]) {
-    if (restoreBackup(file, 'always-local', info)) restored++;
-  }
+    // 4. 倒序恢复 always-local 组
+    info('Restoring always-local patches...');
+    for (const file of [staged.productJson, staged.extensionHostJs, staged.alwaysLocalMain]) {
+      if (restoreBackup(file, 'always-local', info)) restored++;
+    }
 
-  // 5. 倒序恢复 inject 组 (glass → desktop → product.json, checksum 正确还原)
-  info('Restoring inject patches...');
-  for (const file of [paths.productJson, paths.glassJs, paths.workbenchJs]) {
-    if (restoreBackup(file, 'inject', info)) restored++;
-  }
+    // 5. 倒序恢复 inject 组 (glass → desktop → product.json, checksum 正确还原)
+    info('Restoring inject patches...');
+    for (const file of [staged.productJson, staged.glassJs, staged.workbenchJs]) {
+      if (restoreBackup(file, 'inject', info)) restored++;
+    }
 
-  // 6. 删除扩展
-  removeExtension(paths, info);
+    // 6. 删除扩展
+    removeExtension(staged, info);
 
-  console.log('');
-  if (restored > 0) {
-    ok(`Restored ${restored} file(s)`);
-  } else {
-    warn('No backups found (already clean?)');
-  }
+    rmSync(join(staged.appRoot, INSTALLATION_MANIFEST), { force: true });
+    console.log('');
+    if (restored > 0) {
+      ok(`Restored ${restored} file(s)`);
+    } else {
+      warn('No backups found (already clean?)');
+    }
+  });
   ok('Uninstallation complete');
   warn('Restart Cursor for changes to take effect.');
 }

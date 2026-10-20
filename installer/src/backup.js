@@ -17,6 +17,7 @@
  */
 import { copyFileSync, existsSync, readdirSync, renameSync, unlinkSync } from 'fs';
 import { basename, dirname, join } from 'path';
+import { validateBackup, writeBackupMetadata } from './installation-state.js';
 
 const PREFIX = 'backup-byok';
 
@@ -28,7 +29,7 @@ function backupNamePattern(base, tag) {
 function listBackups(dir, base, tag) {
   if (!existsSync(dir)) return [];
   const prefix = backupNamePattern(base, tag);
-  return readdirSync(dir).filter(f => f.startsWith(prefix)).sort();
+  return readdirSync(dir).filter(f => f.startsWith(prefix) && !f.endsWith('.metadata.json')).sort();
 }
 
 export function createBackup(filePath, tag, log) {
@@ -36,6 +37,7 @@ export function createBackup(filePath, tag, log) {
   const base = basename(filePath);
   const existing = listBackups(dir, base, tag);
   if (existing.length > 0) {
+    validateBackup(join(dir, existing[0]), filePath, { adoptLegacy: true });
     log?.(`  Backup exists: ${existing[0]}`);
     return join(dir, existing[0]);
   }
@@ -43,6 +45,7 @@ export function createBackup(filePath, tag, log) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const backupPath = `${filePath}.${PREFIX}-${tag}-${ts}`;
   copyFileSync(filePath, backupPath);
+  writeBackupMetadata(backupPath, filePath);
   log?.(`  Backup [${tag}]: ${basename(backupPath)}`);
   return backupPath;
 }
@@ -59,10 +62,13 @@ export function restoreBackup(filePath, tag, log) {
 
   // 同 tag 下多份时取最早的一份(最接近原始),其他冗余份删除
   const primary = backups[0];
+  validateBackup(join(dir, primary), filePath);
   renameSync(join(dir, primary), filePath);
+  try { unlinkSync(join(dir, `${primary}.metadata.json`)); } catch {}
   for (let i = 1; i < backups.length; i++) {
     try {
       unlinkSync(join(dir, backups[i]));
+      try { unlinkSync(join(dir, `${backups[i]}.metadata.json`)); } catch {}
     }
     catch {}
   }

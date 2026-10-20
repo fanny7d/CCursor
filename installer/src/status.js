@@ -1,3 +1,4 @@
+import { collectDiagnostics } from './doctor.js';
 /**
  * ccursor status — check install state
  */
@@ -29,6 +30,14 @@ export async function status() {
   }
 
   console.log(`Cursor: ${paths.appRoot}\n`);
+
+  const diagnosticReport = await collectDiagnostics(paths);
+  console.log(`Installed extension: ${diagnosticReport.installation.extensionVersion}; build: ${diagnosticReport.installation.recordedBuild}`);
+  console.log(`Extension SHA-256: ${diagnosticReport.installation.extensionSha256 || 'unavailable'}`);
+  console.log(`Runtime health: ${diagnosticReport.runtime.health}; running version: ${diagnosticReport.runtime.version}`);
+  const completed = diagnosticReport.runtime.upstreamOutcomes?.completed;
+  console.log(completed === undefined ? 'Upstream request evidence: unavailable (health alone is not verification)' : `Completed upstream requests in this process: ${completed}`);
+  console.log('');
 
   // Extension
   const extInstalled = isExtensionInstalled(paths);

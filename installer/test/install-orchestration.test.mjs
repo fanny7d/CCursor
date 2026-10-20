@@ -48,6 +48,8 @@ function mutation(name) {
 `;
 const installBundle = join(fixtureRoot, 'install.cjs');
 await buildFixture('install.js', installBundle, {
+  'transaction.js': `${common} export async function withInstallationTransaction(paths,prepare){return prepare(paths,state().configDir);} export function applicationFiles(){return [];} export function treeFiles(){return [];}`,
+  'installation-state.js': `${common} export function writeInstallationManifest(){}`,
   'detect.js': `${common} export function findCursorPathsDetailed(){ return {paths:state().paths,diagnostic:{}}; } export function formatDiagnostic(){return 'fixture';}`,
   'check.js': `${common} export async function check(){state().events.push('check:start');await new Promise(resolve=>setImmediate(resolve));if(state().failPreflight)throw Error('fixture preflight failed');state().events.push('check:complete');}`,
   'extension-embed.js': `${common} export function isExtensionInstalled(){return state().installed;} export function installExtension(){mutation('extension');}`,
@@ -72,6 +74,7 @@ function startFixture(name, overrides = {}) {
     events: [],
     paths: { appRoot: root, cursorVersion: '3.25.9', workbenchJs, glassJs: join(root, 'absent-glass.js') },
     mutationFile: join(root, 'mutation-receipt'),
+    configDir: join(root, 'config'),
     installed: true,
     fullyPatched: false,
     backups: false,

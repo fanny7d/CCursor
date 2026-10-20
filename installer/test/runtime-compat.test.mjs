@@ -82,7 +82,7 @@ test('file patch and rollback restore both agent transports and retrieval exactl
     patchRuntimeCompat(paths);
     assert.equal(isRuntimeCompatPatched(paths), true);
     patchRuntimeCompat(paths);
-    assert.equal(readdirSync(join(alwaysLocalMain, '..')).filter(name => name.includes('backup')).length, 1);
+    assert.equal(readdirSync(join(alwaysLocalMain, '..')).filter(name => name.includes('backup') && !name.endsWith('.metadata.json')).length, 1);
     restoreRuntimeCompat(paths);
     assert.equal(readFileSync(alwaysLocalMain, 'utf8'), call);
     assert.equal(readFileSync(agentHostMain, 'utf8'), network);

@@ -27,6 +27,10 @@ import { patchRuntimeCompat, isRuntimeCompatPatched } from './patch-runtime-comp
 import { check } from './check.js';
 // delete-fix 已移除 — 3.2.11 原生 tombstoneDeletedComposer 已覆盖
 import { releaseDefaults } from './release-defaults.js';
+import { applicationFiles, treeFiles, withInstallationTransaction } from './transaction.js';
+import { writeInstallationManifest } from './installation-state.js';
+import { loadRoutes } from './routes.js';
+import { join } from 'path';
 
 const ok = msg => console.log(`\x1b[32m[OK]\x1b[0m ${msg}`);
 const info = msg => console.log(`\x1b[34m[>]\x1b[0m ${msg}`);
@@ -66,7 +70,10 @@ export async function install({ refreshExtension = false } = {}) {
 
   if (extInstalled && hookInjected && alPatched && agentHostPatched && proxy39Ok && agentGateOk && isRuntimeCompatPatched(paths)) {
     if (refreshExtension) {
-      installExtension(paths, info);
+      await withInstallationTransaction(paths, async (staged) => {
+        installExtension(staged, info);
+        writeInstallationManifest(staged, [...applicationFiles(staged), ...treeFiles(staged.cursor2plusDir)]);
+      });
       ok('Extension refreshed; application patches and configuration preserved');
       warn('Restart Cursor for changes to take effect.');
       return;
@@ -85,29 +92,33 @@ export async function install({ refreshExtension = false } = {}) {
   console.log('');
 
   // 1. 释放默认配置到 ~/.ccursor/ (尊重已有用户文件)
-  releaseDefaults(info);
+  await withInstallationTransaction(paths, async (staged, configDir) => {
+    releaseDefaults(info, { configDir });
+    staged.routesConfig = loadRoutes(join(configDir, 'routes.json'));
 
-  // 2. 安装扩展
-  installExtension(paths, info);
+    // 2. 安装扩展
+    installExtension(staged, info);
 
-  // 3. Inject renderer hook
-  patchInject(paths, info);
+    // 3. Inject renderer hook
+    patchInject(staged, info);
 
-  // 4. Always-local + sig bypass
-  patchAlwaysLocal(paths, info);
+    // 4. Always-local + sig bypass
+    patchAlwaysLocal(staged, info);
 
-  // 5. Independent Agent Host transport (3.13+)
-  patchAgentHost(paths, info);
+    // 5. Independent Agent Host transport (3.13+)
+    patchAgentHost(staged, info);
 
-  // 6. Cursor 3.9+ always-local singleton BYOK router + HTTP/1.1 proxy sync
-  patchProxy39(paths, info);
+    // 6. Cursor 3.9+ always-local singleton BYOK router + HTTP/1.1 proxy sync
+    patchProxy39(staged, info);
 
-  // 7. KaTeX CSS link (workbench.html + checksum)
-  patchKatex(paths, info);
+    // 7. KaTeX CSS link (workbench.html + checksum)
+    patchKatex(staged, info);
 
-  // 8. Cursor 3.23+ Agent Host 门闩强制关闭 (恢复 legacy 拓扑, 修复 remote 工作区 BYOK)
-  patchAgentHostGate(paths, info);
-  patchRuntimeCompat(paths, info);
+    // 8. Cursor 3.23+ Agent Host 门闩强制关闭 (恢复 legacy 拓扑, 修复 remote 工作区 BYOK)
+    patchAgentHostGate(staged, info);
+    patchRuntimeCompat(staged, info);
+    writeInstallationManifest(staged, [...applicationFiles(staged), ...treeFiles(staged.cursor2plusDir)]);
+  });
 
   console.log('');
   ok('Installation complete!');

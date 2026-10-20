@@ -1,3 +1,4 @@
+import { doctor } from './doctor.js';
 /**
  * ccursor CLI — Cursor++ BYOK Installer
  *
@@ -13,6 +14,7 @@ import { status } from './status.js';
 import { check } from './check.js';
 import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { patchLocalMode } from './patch-local-mode.js';
+import { recoverInstallation } from './transaction.js';
 import { restoreBackup } from './backup.js';
 
 async function update() {
@@ -27,6 +29,17 @@ const commands = {
   update,
   upgrade: update,
   status,
+  doctor: async () => {
+    const index = process.argv.indexOf('--output');
+    if (index !== -1 && !process.argv[index + 1]) throw new Error('--output requires a new file path');
+    await doctor({ output: index === -1 ? undefined : process.argv[index + 1] });
+  },
+  recover: async () => {
+    const { paths, diagnostic } = findCursorPathsDetailed();
+    if (!paths) throw new Error(formatDiagnostic(diagnostic));
+    recoverInstallation(paths);
+    console.log('Installation restored to its previous state.');
+  },
   check,
   'local-mode': async () => {
     const info = msg => console.log(`\x1b[34m[>]\x1b[0m ${msg}`);
@@ -67,6 +80,8 @@ Commands:
   upgrade          Alias for update
   local-mode       Standalone tool: enable Cursor's built-in Local Agent mode
   local-mode-off   Standalone tool: disable Local Agent mode (restore originals)
+  doctor           Print a sanitized JSON report (--output NEW_FILE to save)
+  recover          Recover an interrupted installation (close Cursor first)
   status           Check current installation status
   check            Dry-run: verify AST patch targets are matchable
   help             Show this help message
