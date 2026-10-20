@@ -1,4 +1,4 @@
-import { unlinkSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { create } from '@bufbuild/protobuf'
@@ -8,7 +8,7 @@ import {
   listSpeculativeConversationSummaries,
   persistConversationSummaries,
 } from '../database/chatSummaries'
-import { resetAgentDatabaseForTests } from '../database/sqlite'
+import { closeAgentDatabase, resetAgentDatabaseForTests } from '../database/sqlite'
 import {
   ConversationMessage_MessageType,
   ConversationMessage_ToolResultSchema,
@@ -34,13 +34,10 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await resetAgentDatabaseForTests()
+  await closeAgentDatabase()
   delete process.env.BYOK_AGENT_DB_PATH
   for (const suffix of ['', '-wal', '-shm']) {
-    try {
-      unlinkSync(`${tmpDbPath}${suffix}`)
-    }
-    catch {}
+    rmSync(`${tmpDbPath}${suffix}`, { force: true })
   }
 })
 

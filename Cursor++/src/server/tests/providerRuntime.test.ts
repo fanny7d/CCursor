@@ -6,7 +6,7 @@ import { toJsonString } from '@bufbuild/protobuf'
 import { expect, it } from 'vitest'
 import { persistBlob } from '../database/blobs'
 import { getPersistedConversationCheckpoint, persistConversationCheckpoint } from '../database/checkpoints'
-import { resetAgentDatabaseForTests } from '../database/sqlite'
+import { closeAgentDatabase, resetAgentDatabaseForTests } from '../database/sqlite'
 import { AgentServerMessageSchema } from '../gen/agent_v1_pb'
 import { cacheBlob, getCachedBlob, resetBlobCacheForTests, warmupBlobsAsync } from '../handlers/agent/blobStore'
 import { checkpoint, kvMessage, summary, summaryCompleted, summaryStarted } from '../handlers/agent/stream'
@@ -348,7 +348,7 @@ async function withTempAgentDatabase(run: () => Promise<void>): Promise<void> {
   }
   finally {
     resetBlobCacheForTests()
-    await resetAgentDatabaseForTests()
+    await closeAgentDatabase()
     if (prevDbPath === undefined)
       delete process.env.BYOK_AGENT_DB_PATH
     else process.env.BYOK_AGENT_DB_PATH = prevDbPath

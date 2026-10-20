@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { persistBlob } from '../database/blobs'
 import { persistConversationCheckpoint } from '../database/checkpoints'
-import { resetAgentDatabaseForTests } from '../database/sqlite'
+import { closeAgentDatabase, resetAgentDatabaseForTests } from '../database/sqlite'
 import { encodeBlob } from '../handlers/agent/blob'
 import { resetBlobCacheForTests, warmupBlobsAsync } from '../handlers/agent/blobStore'
 import { rebuildConversationHistory } from '../handlers/agent/historyManager'
@@ -43,7 +43,7 @@ async function withTempAgentDatabase(run: () => Promise<void>): Promise<void> {
   finally {
     capturedParsed = []
     resetBlobCacheForTests()
-    await resetAgentDatabaseForTests()
+    await closeAgentDatabase()
     if (prevDbPath === undefined)
       delete process.env.BYOK_AGENT_DB_PATH
     else process.env.BYOK_AGENT_DB_PATH = prevDbPath

@@ -1,10 +1,10 @@
 import type { HistoryEntry } from '../handlers/agent/historyManager'
 import type { LLMMessage } from '../handlers/llm/types'
-import { unlinkSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetAgentDatabaseForTests } from '../database/sqlite'
+import { closeAgentDatabase, resetAgentDatabaseForTests } from '../database/sqlite'
 import { encodeBlob } from '../handlers/agent/blob'
 import { cacheBlob, resetBlobCacheForTests } from '../handlers/agent/blobStore'
 import { createCompactionArtifacts, estimateMessagesTokens, formatMessageForSummary, planCompaction } from '../handlers/agent/compactionStrategy'
@@ -54,14 +54,11 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await resetAgentDatabaseForTests()
+  await closeAgentDatabase()
   resetBlobCacheForTests()
   delete process.env.BYOK_AGENT_DB_PATH
   for (const suffix of ['', '-wal', '-shm']) {
-    try {
-      unlinkSync(`${tmpDbPath}${suffix}`)
-    }
-    catch {}
+    rmSync(`${tmpDbPath}${suffix}`, { force: true })
   }
 })
 

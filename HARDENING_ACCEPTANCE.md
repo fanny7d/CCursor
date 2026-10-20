@@ -28,7 +28,7 @@
 
 ## CI 与部署边界
 
-CI 覆盖 Linux、macOS、Windows，使用 Node 24.22.0、pnpm 11.22.0 和真实 `@vscode/sqlite3`。
+CI 覆盖 Linux、macOS Intel、Windows；本地验证为 macOS ARM64。CI 使用 Node 24.22.0、pnpm 11.22.0 和真实 `@vscode/sqlite3`。
 无真实 Cursor 的 CI 保留原有可选 bundle 测试跳过；Windows 跳过不适用的 POSIX 权限／符号链接测试。
 各平台源码验证与真实 Cursor GUI 验收分别记录。
 
