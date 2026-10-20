@@ -54,14 +54,14 @@ function copyPrivate(source, target) {
   cpSync(source, target, { recursive: true, preserveTimestamps: true });
 }
 
-function replace(target, source, mode) {
+function replace(target, source, mode, locations = {}) {
   if (!source) {
     rmSync(target, { recursive: true, force: true });
     return;
   }
   mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
-  const staging = join(dirname(target), `.ccursor-new-${randomUUID()}`);
-  const previous = join(dirname(target), `.ccursor-old-${randomUUID()}`);
+  const staging = locations.staging || join(dirname(target), `.ccursor-new-${randomUUID()}`);
+  const previous = locations.previous || join(dirname(target), `.ccursor-old-${randomUUID()}`);
   let moved = false;
   try {
     cpSync(source, staging, { recursive: true, preserveTimestamps: true });
@@ -80,15 +80,23 @@ function replace(target, source, mode) {
   finally { rmSync(staging, { recursive: true, force: true }); }
 }
 
+function cleanupOperationTemps(op) {
+  for (const name of ['staging', 'previous']) {
+    if (op[name]) rmSync(op[name], { recursive: true, force: true });
+  }
+}
+
 function restoreOperations(record, operations = record.operations, checkConcurrent = false) {
   for (const op of [...operations].reverse()) {
     if (checkConcurrent) {
       const current = hashPath(op.target);
-      if (current === op.before) continue;
+      if (current === op.before) { cleanupOperationTemps(op); continue; }
       if (current !== op.after) throw new Error('A concurrent edit prevents automatic recovery');
     }
     if (op.original && hashPath(op.original) !== op.before) throw new Error('Recovery snapshot checksum mismatch');
-    replace(op.target, op.original, op.mode);
+    cleanupOperationTemps(op);
+    replace(op.target, op.original, op.mode, op);
+    cleanupOperationTemps(op);
   }
   if (!record.configExisted && existsSync(record.configDir) && !readdirSync(record.configDir).length)
     rmSync(record.configDir, { recursive: true });
@@ -103,6 +111,9 @@ export function recoverInstallation(paths, { configDir = CCURSOR_DIR } = {}) {
   if (record.appRoot !== paths.appRoot || record.configDir !== configDir || !Array.isArray(record.operations)) throw new Error('Recovery target mismatch');
   for (const op of record.operations) {
     if ((!inside(paths.appRoot, op.target) && !inside(configDir, op.target)) || (op.original && !inside(workspace, op.original))) throw new Error('Invalid recovery path');
+    for (const name of ['staging', 'previous']) {
+      if (op[name] && (dirname(op[name]) !== dirname(op.target) || !/^\.ccursor-(?:new|old)-[a-f0-9-]{36}$/.test(basename(op[name])))) throw new Error('Invalid recovery temporary path');
+    }
   }
   restoreOperations(record);
   rmSync(marker);
@@ -162,6 +173,7 @@ export async function withInstallationTransaction(paths, prepare, { configDir = 
       if (before === after) continue;
       const original = baseline.get(target)?.original ?? null;
       operations.push({ target, source: after === null ? null : source, original, before, after,
+        staging: join(dirname(target), `.ccursor-new-${randomUUID()}`), previous: join(dirname(target), `.ccursor-old-${randomUUID()}`),
         mode: baseline.get(target)?.mode ?? (existsSync(source) ? statSync(source).mode & 0o777 : 0o600) });
     }
     const record = { schemaVersion: 1, appRoot: paths.appRoot, configDir, configExisted: originalConfigExisted, operations };
@@ -178,7 +190,7 @@ export async function withInstallationTransaction(paths, prepare, { configDir = 
         beforeCommit?.(index, op.target);
         if (hashPath(op.target) !== op.before) throw new Error('Installation target changed during commit');
         applied.push(op);
-        replace(op.target, op.source, op.mode);
+        replace(op.target, op.source, op.mode, op);
       }
       rmSync(marker);
     }

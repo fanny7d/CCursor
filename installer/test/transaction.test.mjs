@@ -123,7 +123,9 @@ test('legacy backup adoption requires matching vendor product builds', t => {
 });
 
 test('process interruption leaves a journal that can restore the previous installation', t => {
-  const { root, paths, configDir } = fixture(t), before = snapshot(root);
+  const { root, paths, configDir } = fixture(t);
+  writeFileSync(join(dirname(paths.workbenchJs), '.ccursor-new-user-owned'), 'unrelated file');
+  const before = snapshot(root);
   const script = `import {withInstallationTransaction} from ${JSON.stringify(new URL('../src/transaction.js', import.meta.url).href)};
     import {writeFileSync} from 'node:fs';
     await withInstallationTransaction(${JSON.stringify(paths)}, async staged => {
@@ -132,6 +134,12 @@ test('process interruption leaves a journal that can restore the previous instal
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8', timeout: 10000 });
   assert.equal(child.status, 66, child.stderr);
   assert.equal(existsSync(join(paths.appRoot, JOURNAL_FILE)), true);
+  const journal = JSON.parse(readFileSync(join(paths.appRoot, JOURNAL_FILE), 'utf8'));
+  const recovery = JSON.parse(readFileSync(join(journal.workspace, 'recovery.json'), 'utf8'));
+  // Model a kill between directory/file swap operations, including recovery
+  // itself. Only journal-owned temporary names may be cleaned up.
+  writeFileSync(recovery.operations[0].staging, 'partial new file');
+  writeFileSync(recovery.operations[0].previous, 'previous interrupted file');
   recoverInstallation(paths, { configDir });
   assert.deepEqual(snapshot(root), before);
 });
