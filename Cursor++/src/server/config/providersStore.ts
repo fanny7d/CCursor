@@ -10,11 +10,12 @@
  * 写: tmp + rename, withSerial 串行化
  */
 import type { ProviderEntry, ProviderModel, ProvidersConfig } from '../data/defaults'
-import { existsSync, unwatchFile, watchFile } from 'node:fs'
+import { unwatchFile, watchFile } from 'node:fs'
 import { DEFAULT_PROVIDERS } from '../data/defaults'
 import { logger } from '../logger'
 import { readJsonOrNull, withSerial, writeJsonAtomic } from './atomic'
 import { getProvidersFilePath } from './paths'
+import { isConfigObject, readConfigForUpdate } from './readConfigForUpdate'
 
 export interface ResolvedProviderModel {
   provider: ProviderEntry
@@ -70,6 +71,12 @@ function withFallback(loaded: Partial<ProvidersConfig> | null): ProvidersConfig 
   }
 }
 
+function isProvidersDocument(value: unknown): value is Partial<ProvidersConfig> {
+  return isConfigObject(value) && Array.isArray(value.providers)
+    && value.providers.every(provider => isConfigObject(provider)
+      && (provider.models === undefined || (Array.isArray(provider.models) && provider.models.every(isConfigObject))))
+}
+
 export function loadProviders(): ProvidersConfig {
   if (cache)
     return cache
@@ -82,23 +89,25 @@ export function loadProviders(): ProvidersConfig {
 /**
  * 首次启动确保 providers.json 存在 (不存在 → 写默认种子)。
  *
- * 关键: 只在文件**物理不存在**时才写种子。如果文件存在但 readJsonOrNull 返回
- * null (权限错/JSON 损坏),**不覆盖** — 避免用户手动配置被空种子冲掉。
+ * 关键: 只在文件**物理不存在**时才写种子。现有文件权限错 / JSON 损坏时
+ * **不覆盖** — 避免用户手动配置被空种子冲掉。
  * macOS 26+ 上曾观测到 extension host 因安全策略读文件失败的情况。
  */
 export async function ensureProvidersFile(): Promise<ProvidersConfig> {
   const path = getProvidersFilePath()
   return withSerial(path, () => {
-    const existing = readJsonOrNull<Partial<ProvidersConfig>>(path)
-    if (existing && Array.isArray(existing.providers)) {
-      cache = withFallback(existing)
+    let existing: Partial<ProvidersConfig> | null
+    try {
+      existing = readConfigForUpdate(path, isProvidersDocument)
+    }
+    catch {
+      logger.warn({ path }, '[CFG] providers.json is unreadable or invalid — not overwriting, using empty defaults')
+      cache = clone(DEFAULT_PROVIDERS)
       reverseIndex = rebuildIndex(cache)
       return cache
     }
-    // 文件物理存在但解析失败 → 不覆盖,用空默认值运行 (让用户修复文件)
-    if (existsSync(path)) {
-      logger.warn({ path }, '[CFG] providers.json exists but failed to parse — not overwriting, using empty defaults')
-      cache = clone(DEFAULT_PROVIDERS)
+    if (existing) {
+      cache = withFallback(existing)
       reverseIndex = rebuildIndex(cache)
       return cache
     }
@@ -115,7 +124,7 @@ export async function ensureProvidersFile(): Promise<ProvidersConfig> {
 export async function updateProviders(updater: (draft: ProvidersConfig) => void): Promise<ProvidersConfig> {
   const path = getProvidersFilePath()
   return withSerial(path, () => {
-    const current = withFallback(readJsonOrNull<Partial<ProvidersConfig>>(path))
+    const current = withFallback(readConfigForUpdate(path, isProvidersDocument))
     updater(current)
     writeJsonAtomic(path, current)
     cache = current

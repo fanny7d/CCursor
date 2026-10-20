@@ -63,6 +63,18 @@ function getCaCerts(): string[] {
 
 // ── Proxy Fetch ──
 
+function proxyAddressForLog(proxyUrl: string): string {
+  try {
+    const url = new URL(proxyUrl)
+    // Proxy user/password, query tokens and paths are connection settings,
+    // never diagnostics. Keep only the protocol and address in logs.
+    return `${url.protocol}//${url.host}`
+  }
+  catch {
+    return '[configured proxy]'
+  }
+}
+
 /**
  * 返回独立于 VS Code proxy 设置的 fetch 函数供 LLM SDK 使用。
  *
@@ -80,7 +92,7 @@ export function createProxiedFetch(proxyUrl: string | undefined): typeof globalT
       uri: proxyUrl,
       requestTls: { ca },
     })
-    logger.info({ proxyUrl, caCount: ca.length }, '[PROXY] LLM fetch via proxy')
+    logger.info({ proxyUrl: proxyAddressForLog(proxyUrl), caCount: ca.length }, '[PROXY] LLM fetch via proxy')
     return ((input: any, init?: any) =>
       undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch
   }

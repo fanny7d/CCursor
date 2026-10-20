@@ -10,6 +10,7 @@ import { buildRedirectForMode, DEFAULT_ROUTES } from '../data/defaults'
 import { logger } from '../logger'
 import { readJsonOrNull, withSerial, writeJsonAtomic } from './atomic'
 import { getRoutesFilePath } from './paths'
+import { isConfigObject, readConfigForUpdate } from './readConfigForUpdate'
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -44,6 +45,13 @@ function withFallback(loaded: Partial<RoutesConfig> | null): RoutesConfig {
   }
 }
 
+function isRoutesDocument(value: unknown): value is Partial<RoutesConfig> {
+  return isConfigObject(value)
+    && (value.server === undefined || isConfigObject(value.server))
+    && (value.collector === undefined || isConfigObject(value.collector))
+    && (value.redirect === undefined || (Array.isArray(value.redirect) && value.redirect.every(entry => typeof entry === 'string')))
+}
+
 export function loadRoutes(): RoutesConfig {
   const loaded = readJsonOrNull<Partial<RoutesConfig>>(getRoutesFilePath())
   return withFallback(loaded)
@@ -52,11 +60,19 @@ export function loadRoutes(): RoutesConfig {
 /**
  * 首次启动 / 缺字段时把内置默认值补齐写回。
  * 已有字段一律保留, 不覆盖用户值。
+ * 现有文件无法读取或解析时仅返回默认值,不写回覆盖原文件。
  */
 export async function ensureRoutesFile(): Promise<RoutesConfig> {
   const path = getRoutesFilePath()
   return withSerial(path, () => {
-    const existing = readJsonOrNull<Partial<RoutesConfig>>(path)
+    let existing: Partial<RoutesConfig> | null
+    try {
+      existing = readConfigForUpdate(path, isRoutesDocument)
+    }
+    catch {
+      logger.warn({ path }, '[CFG] routes.json is unreadable or invalid — not overwriting, using defaults')
+      return withFallback(null)
+    }
     const merged = withFallback(existing)
     if (JSON.stringify(existing) !== JSON.stringify(merged)) {
       writeJsonAtomic(path, merged)
@@ -70,7 +86,7 @@ export async function ensureRoutesFile(): Promise<RoutesConfig> {
 export async function updateRoutes(updater: (draft: RoutesConfig) => void): Promise<RoutesConfig> {
   const path = getRoutesFilePath()
   return withSerial(path, () => {
-    const current = withFallback(readJsonOrNull<Partial<RoutesConfig>>(path))
+    const current = withFallback(readConfigForUpdate(path, isRoutesDocument))
     updater(current)
     writeJsonAtomic(path, current)
     return current

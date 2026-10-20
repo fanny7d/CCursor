@@ -50,6 +50,7 @@ export class OpenAIChatProvider implements LLMProvider {
             stream: true,
             stream_options: { include_usage: true },
             ...(request.conversationId ? { prompt_cache_key: request.conversationId } : {}),
+            ...(request.serviceTier ? { service_tier: request.serviceTier } : {}),
         };
 
         const tools = encodeOpenAITools(request.tools);
@@ -64,7 +65,7 @@ export class OpenAIChatProvider implements LLMProvider {
 
         const stream = await this.client.chat.completions.create(params);
 
-        const toolCalls = new Map<number, { id: string; name: string; args: string }>();
+        const toolCalls = new Map<number, { id: string; name: string; args: string; started: boolean }>();
         let usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null = null;
         let sawToolCalls = false;
 
@@ -96,25 +97,30 @@ export class OpenAIChatProvider implements LLMProvider {
             if (delta.tool_calls) {
                 sawToolCalls = true;
                 for (const tc of delta.tool_calls) {
-                    const existing = toolCalls.get(tc.index) ?? { id: '', name: '', args: '' };
+                    const existing = toolCalls.get(tc.index) ?? { id: '', name: '', args: '', started: false };
                     const next = {
                         id: tc.id ?? existing.id,
                         name: tc.function?.name ?? existing.name,
                         args: existing.args + (tc.function?.arguments ?? ''),
+                        started: existing.started,
                     };
 
-                    const shouldStart = !existing.id && !!next.id && !!next.name;
+                    // 兼容网关将 id、name、arguments 拆到不同 chunk 的情况。
+                    // 元数据完整前先缓存参数,确保 start 始终早于 delta。
+                    const shouldStart = !existing.started && !!next.id && !!next.name;
+                    next.started ||= shouldStart;
                     toolCalls.set(tc.index, next);
 
                     if (shouldStart) {
                         yield { type: 'tool_use_start', id: next.id, name: next.name };
                     }
 
-                    if (tc.function?.arguments) {
+                    const argsDelta = shouldStart ? next.args : tc.function?.arguments;
+                    if (next.started && argsDelta) {
                         yield {
                             type: 'tool_use_delta',
                             id: next.id,
-                            input: tc.function.arguments,
+                            input: argsDelta,
                         };
                     }
                 }
@@ -122,7 +128,7 @@ export class OpenAIChatProvider implements LLMProvider {
 
             if (choice?.finish_reason === 'tool_calls') {
                 for (const [, toolCall] of toolCalls) {
-                    if (toolCall.id) {
+                    if (toolCall.started) {
                         yield { type: 'tool_use_done', id: toolCall.id, arguments: toolCall.args || undefined };
                     }
                 }
