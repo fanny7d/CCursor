@@ -13,6 +13,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      CURSOR_APP_ROOT: ${{ runner.temp }}/ccursor-test-runtime
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,6 +26,10 @@ jobs:
       - name: Install extension dependencies
         working-directory: Cursor++
         run: pnpm install --frozen-lockfile
+      - name: Prepare real SQLite module for headless tests
+        run: |
+          mkdir -p "$CURSOR_APP_ROOT"
+          npm install --prefix "$CURSOR_APP_ROOT" --package-lock=false --no-audit --no-fund @vscode/sqlite3@5.1.12-vscode
       - name: Test extension server
         working-directory: Cursor++
         run: pnpm run test:server

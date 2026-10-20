@@ -50,6 +50,11 @@ node dist/cli.cjs check
 由源码构建，不提交到 Git，也不发布到上游 npm 命名空间。
 GitHub Actions 自动运行 Server／安装器测试、类型检查、lint 和打包，并保留 VSIX 构建产物。
 
+数据库测试使用真实 `@vscode/sqlite3`，默认从已安装的 Cursor 加载。
+无 Cursor 的 CI 在临时目录中编译与验收环境相同的 `5.1.12-vscode`，通过现有
+`CURSOR_APP_ROOT` 环境变量指定模块目录；没有替换数据库实现或跳过数据库测试。
+本地无 Cursor 时也可参照 `.github/workflows/ci.yml` 准备这个临时依赖。
+
 ## 安装与回滚
 
 关闭 Cursor，先备份已有 Cursor 应用和 `~/.ccursor/` 配置，再运行本地构建产物：
