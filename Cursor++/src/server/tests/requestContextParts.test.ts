@@ -59,6 +59,27 @@ async function consumePart<T>(generator: AsyncGenerator<AgentServerMessage, T, v
   return next.value
 }
 
+it.each(['binary', 'base64'])('decodes a present zero-byte subagents protobuf over %s transport', async (transport) => {
+  const bytes = toBinary(RequestContextSubagentsPartSchema, create(RequestContextSubagentsPartSchema, {}))
+  expect(bytes).toHaveLength(0)
+  const session = createEphemeralSession(`empty-part-${transport}`)
+  pushSessionMessage(session, {
+    kvClientMessage: { getBlobResult: { blobData: transport === 'binary' ? bytes : '' } },
+  })
+  const part = await consumePart(fetchSubagentsPart({ session, blobId: new Uint8Array([3]), allocateBlobId: () => 3 }))
+  expect(part).toEqual({ customSubagents: [] })
+})
+
+it.each([
+  { label: 'absent bytes', result: {} },
+  { label: 'explicit failure', result: { blobData: new Uint8Array(0), error: { message: 'not found' } } },
+])('retains failure handling for $label instead of treating it as an empty part', async ({ label, result }) => {
+  const session = createEphemeralSession(`missing-part-${label}`)
+  pushSessionMessage(session, { kvClientMessage: { getBlobResult: result } })
+  const part = await consumePart(fetchSubagentsPart({ session, blobId: new Uint8Array([3]), allocateBlobId: () => 3 }))
+  expect(part).toBeNull()
+})
+
 it('falls back to requestContextParts.dynamicContext when inline requestContext is absent (ref_only)', () => {
   const parsed = parseRunRequest(baseRunRequest({
     // ref_only: userMessageAction 内无 requestContext,parts 挂在 action 层

@@ -83,6 +83,13 @@ function extractBlobData(msg: Record<string, unknown>): Uint8Array | null {
     logger.warn({ error: result.error }, '[PROTOCOL] getBlobResult returned error')
     return null
   }
+  // Empty protobuf messages (for example, no custom subagents) serialize to
+  // zero bytes. Preserve the present optional bytes field; toBytes intentionally
+  // rejects empty identifiers elsewhere, but an empty blob payload is valid.
+  if (result.blobData instanceof Uint8Array)
+    return result.blobData
+  if (result.blobData === '')
+    return new Uint8Array(0)
   // JSON transport 会把 proto bytes 编成 base64 string;统一归一后再解码 protobuf。
   return toBytes(result.blobData) ?? null
 }

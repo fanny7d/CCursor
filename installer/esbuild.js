@@ -37,3 +37,7 @@ for (const asset of ASSETS) {
 }
 
 console.log('[build] done');
+
+for (const asset of ['punycode.cjs', 'punycode.LICENSE.txt']) {
+  copyFileSync(join(__dirname, 'assets', 'vendor', asset), join(__dirname, 'dist', asset));
+}

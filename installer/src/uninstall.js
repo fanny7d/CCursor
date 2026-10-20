@@ -2,6 +2,8 @@
  * ccursor uninstall — full rollback
  *
  * Reverse order (opposite of install):
+ *   -1. Restore runtime-compat (agent timeout defaults + retrieval punycode)
+ *   0. Restore agent-host-gate group (product.json → workbench desktop/glass)
  *   1. Restore katex group (product.json → workbench.html)
  *   2. Restore proxy-39 group (product.json → alwaysLocalSingletonMain.js)
  *   3. Restore agent-host group (product.json → fingerprint-matched chunks → main.js)
@@ -17,6 +19,7 @@ import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { restoreBackup } from './backup.js';
 import { removeExtension } from './extension-embed.js';
 import { getAgentHostBackupTargets } from './patch-agent-host.js';
+import { restoreRuntimeCompat } from './patch-runtime-compat.js';
 
 const ok = msg => console.log(`\x1b[32m[OK]\x1b[0m ${msg}`);
 const info = msg => console.log(`\x1b[34m[>]\x1b[0m ${msg}`);
@@ -41,6 +44,14 @@ export async function uninstall() {
   const workbenchHtml = join(paths.appRoot, 'out', 'vs', 'code', 'electron-sandbox', 'workbench', 'workbench.html');
 
   const singletonJs = join(paths.appRoot, 'out', 'vs', 'code', 'electron-utility', 'alwaysLocalSingleton', 'alwaysLocalSingletonMain.js');
+
+  restoreRuntimeCompat(paths, info);
+
+  // 0. 倒序恢复 agent-host-gate 组 (安装顺序最后 → 最先恢复)
+  info('Restoring agent-host-gate patches...');
+  for (const file of [paths.productJson, paths.workbenchJs, paths.glassJs]) {
+    if (restoreBackup(file, 'agent-host-gate', info)) restored++;
+  }
 
   // 1. 倒序恢复 katex 组
   info('Restoring katex patches...');

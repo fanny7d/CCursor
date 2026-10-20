@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+providers.json
+routes.json
+cursor.db*
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+/artifacts/
+/verification/

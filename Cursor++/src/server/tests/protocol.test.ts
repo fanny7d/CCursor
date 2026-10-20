@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { CursorRuleSource } from '../gen/agent_v1_pb'
 import { buildMessages, parseRunRequest } from '../handlers/agent/protocol'
 
 it('parseRunRequest extracts prependUserMessages for mid-conversation replay', () => {
@@ -193,6 +194,12 @@ it('buildMessages produces official-style system and structured user content', (
             rules: [
               {
                 content: 'Always reply in Chinese',
+                source: CursorRuleSource.USER,
+                type: { global: {} },
+              },
+              {
+                content: 'Keep changes within the workspace',
+                fullPath: '/workspace/app/.cursor/rules/scope.mdc',
                 type: { global: {} },
               },
               {
@@ -213,6 +220,8 @@ it('buildMessages produces official-style system and structured user content', (
   })
 
   const [systemMessage, preambleUserMessage, currentUserMessage] = buildMessages(parsed)
+  expect(parsed.userRules).toEqual(['Always reply in Chinese'])
+  expect(parsed.alwaysRules.map(rule => rule.content)).toEqual(['Keep changes within the workspace'])
   expect(systemMessage?.role).toBe('system')
   expect(preambleUserMessage?.role).toBe('user')
   expect(currentUserMessage?.role).toBe('user')
@@ -231,6 +240,8 @@ it('buildMessages produces official-style system and structured user content', (
   expect(preambleUserContent).toMatch(/<rules>/)
   expect(preambleUserContent).toMatch(/<user_rules/)
   expect(preambleUserContent).toMatch(/Always reply in Chinese/)
+  expect(preambleUserContent).toMatch(/<user_rule>Always reply in Chinese<\/user_rule>/)
+  expect(preambleUserContent).toMatch(/<always_applied_workspace_rule[^>]*>Keep changes within the workspace<\/always_applied_workspace_rule>/)
   expect(preambleUserContent).toMatch(/<always_applied_workspace_rules/)
   // fileGlobbed 正文不预载，读取匹配文件后才通过 related_cursor_rules 注入。
   expect(preambleUserContent).not.toMatch(/Use pnpm/)

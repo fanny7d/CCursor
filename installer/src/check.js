@@ -6,7 +6,9 @@ import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { checkAlwaysLocalPatch } from './patch-always-local.js';
 import { checkAgentHostPatch } from './patch-agent-host.js';
 import { checkProxy39Patch, needsProxy39Patch } from './patch-proxy-39.js';
+import { checkAgentHostGatePatch } from './patch-agent-host-gate.js';
 import { isInjectPatched } from './patch-inject.js';
+import { checkRuntimeCompat } from './patch-runtime-compat.js';
 
 const ok = s => `\x1b[32m✓ ${s}\x1b[0m`;
 const fail = s => `\x1b[31m✗ ${s}\x1b[0m`;
@@ -25,6 +27,8 @@ export async function check() {
   console.log();
 
   let allOk = true;
+  try { checkRuntimeCompat(paths, s => console.log(info(s))); }
+  catch (error) { console.log(fail(error.message)); allOk = false; }
 
   // 1. Renderer hook anchor (inject patch) — desktop + glass
   for (const [file, label] of [[paths.workbenchJs, 'desktop'], [paths.glassJs, 'glass']]) {
@@ -88,6 +92,11 @@ export async function check() {
   } else {
     console.log(info('Cursor 3.9 singleton BYOK router/proxy patch not required'));
   }
+
+  // 5b. Cursor 3.23+ agent-host gate off target
+  console.log(info('[check] Verifying cursor_agent_host gate-off target...'));
+  const agentGateOk = checkAgentHostGatePatch(paths, s => console.log(info(s)));
+  if (!agentGateOk) allOk = false;
 
   // 6. cursor-always-local main.js
   if (existsSync(paths.alwaysLocalMain)) {

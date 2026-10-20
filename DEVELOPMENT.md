@@ -1,0 +1,94 @@
+# Cursor++ 二开说明
+
+本仓库基于 [CometixSpace/CCursor](https://github.com/CometixSpace/CCursor) 的
+`fcac85db793fc2c8cda3318b96ec5a41c24f5e26`，保留上游历史及
+AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`。
+
+## 已包含的改动
+
+- Cursor 3.25.9 桌面／Agents 窗口兼容：关闭 Agent Host 门闩，使用保留的 legacy 路径。该部分基于上游 PR #33。
+- HTTP/1.1 使用原有 20 秒默认超时，不读取无关的 HTTP/2 配置；保留 HTTP/2 原有行为。
+- 内联带 MIT 许可证的 punycode 2.3.1，替换 `cursor-retrieval` 的 Node 内置引用。
+- 正确解码显式存在的零字节 protobuf 上下文；缺失字段与错误仍然失败。
+- 修正规则分类测试中的用户规则／工作区规则输入。
+- 安装前检查、状态检查、分组备份及逆序回滚。
+- 通用 NAS / gpt-6-luna Max 示例；密钥和私人部署信息不在仓库中。
+
+## 目录
+
+| 目录 | 职责 |
+|---|---|
+| `Cursor++/src/server/handlers/agent/` | Cursor 协议、上下文、Agent 和工具循环 |
+| `Cursor++/src/server/handlers/llm/` | OpenAI Chat / Responses、Anthropic、Gemini 请求适配 |
+| `Cursor++/src/server/handlers/models/` | 模型列表、推理档位和变体 |
+| `Cursor++/src/server/tests/` | Server 回归测试 |
+| `installer/src/` | Cursor 检测、补丁、安装、检查和回滚 |
+| `installer/test/` | 补丁语义、幂等和回滚测试 |
+| `installer/assets/vendor/` | punycode 2.3.1 及原始 MIT 许可 |
+| `examples/` | 占位配置，不包含真实凭据 |
+
+## 构建和检查
+
+验证环境：macOS Apple Silicon、Cursor 3.25.9、Node.js 24、pnpm 11。
+其他 Cursor 版本、Windows、Linux、Remote SSH 需要另行验收。
+
+```bash
+git clone --branch fanny7d/cursor-3259-nas https://github.com/fanny7d/CCursor.git
+cd CCursor/Cursor++
+pnpm install --frozen-lockfile
+pnpm run check-types
+pnpm run lint
+pnpm run test:server
+cd ../installer
+npm ci
+npm test
+npm run build:all
+node dist/cli.cjs check
+```
+
+产物为 `Cursor++/cursor2plus-0.0.15.vsix`、`installer/vsix/` 和 `installer/dist/`。
+由源码构建，不提交到 Git，也不发布到上游 npm 命名空间。
+GitHub Actions 自动运行 Server／安装器测试、类型检查、lint 和打包，并保留 VSIX 构建产物。
+
+## 安装与回滚
+
+关闭 Cursor，先备份已有 Cursor 应用和 `~/.ccursor/` 配置，再运行本地构建产物：
+
+```bash
+cd installer
+node dist/cli.cjs check
+node dist/cli.cjs install
+# 重启 Cursor 后：
+node dist/cli.cjs status
+# 需要恢复时，关闭 Cursor 后：
+node dist/cli.cjs uninstall
+```
+
+上游 `npx @cometix/ccursor install` 安装的是上游版本。本 fork 使用本地构建产物。
+完整安装时安装器直接返回；修改扩展源码后，需确认使用新构建的 VSIX，
+不能把重复执行 `install` 当作扩展版本已更新的证明。完整重装可能重写路由默认值，先保留配置。
+
+## NAS 与 Max
+
+通过 Cursor++ 面板设置服务商，或参照
+[`examples/providers.nas.example.json`](examples/providers.nas.example.json)
+填写自己的地址和 API Key。不要将真实配置加入 Git；私有配置应仅本人可读写。
+
+`openai-chat` 发送 `reasoning_effort`，`openai-responses` 发送 `reasoning.effort`。
+示例设为 `max`，并暴露 low / medium / high / xhigh / max 五档。
+上游模型和网关必须接受这些值；客户端配置不代表网关已原样转发。
+
+既有验收链路：Cursor → Cursor++ → NAS api2cursor → Sub2API。
+api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
+使用该链路时，网关模型思考等级保留 `default`，最终请求需保留显式 `xhigh` / `max`；
+强制模型映射或请求体模板仍可能覆盖它们。接其他 API 时，分别验证流式输出、工具调用、
+工具结果回传、上下文恢复和最终推理参数。
+
+## 验收边界
+
+真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
+见 [`LOCAL_NAS_ACCEPTANCE.md`](LOCAL_NAS_ACCEPTANCE.md)。
+私人地址、密钥、完整日志和聊天截图不随源码发布。
+独立 Codex 扩展已卸载，Cursor++ 不依赖它；历史 Codex 兼容脚本未纳入本 fork。
+
+Cursor 更新会覆盖应用补丁。更新后先检查新版本匹配情况，并验证实际请求到达自己的上游。

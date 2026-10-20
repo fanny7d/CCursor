@@ -1,0 +1,40 @@
+{
+  "providers": [
+    {
+      "id": "nas-gateway",
+      "name": "NAS gateway",
+      "type": "openai-chat",
+      "baseUrl": "https://nas.example.com/cursor/v1",
+      "auth": {
+        "kind": "apiKey",
+        "value": "REPLACE_WITH_YOUR_GATEWAY_API_KEY"
+      },
+      "headers": {
+        "User-Agent": "CursorPlus-NAS/0.0.15"
+      },
+      "models": [
+        {
+          "id": "nas-gpt-6-luna",
+          "apiModel": "gpt-6-luna",
+          "displayName": "NAS gpt-6-luna",
+          "thinking": true,
+          "thinkingLevel": "max",
+          "parameters": {
+            "effort": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "supportsAgent": true,
+          "supportsImages": true,
+          "contextTokenLimit": 200000,
+          "maxOutputTokens": 8192,
+          "defaultOn": true
+        }
+      ]
+    }
+  ]
+}

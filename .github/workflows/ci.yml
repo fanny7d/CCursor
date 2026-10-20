@@ -1,0 +1,44 @@
+name: Build and test development fork
+
+on:
+  push:
+    branches: [main, 'fanny7d/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11'
+      - name: Install extension dependencies
+        working-directory: Cursor++
+        run: pnpm install --frozen-lockfile
+      - name: Test extension server
+        working-directory: Cursor++
+        run: pnpm run test:server
+      - name: Install installer dependencies
+        working-directory: installer
+        run: npm ci
+      - name: Test installer patches
+        working-directory: installer
+        run: npm test
+      - name: Typecheck, lint and package
+        working-directory: installer
+        run: npm run build:all
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cursor2plus-development-vsix
+          path: installer/vsix/*.vsix
+          if-no-files-found: error
+          retention-days: 14

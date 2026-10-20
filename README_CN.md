@@ -1,3 +1,5 @@
+> **fanny7d 二开分支**：保留上游 AGPL-3.0-or-later 许可，包含 Cursor 3.25.9 / NAS BYOK 兼容修复。构建、安装与二开说明见 [DEVELOPMENT.md](DEVELOPMENT.md)，通用配置见 [examples/providers.nas.example.json](examples/providers.nas.example.json)。
+
 <p align="center">
   <a href="README.md">English</a> | 中文
 </p>
@@ -31,17 +33,16 @@ Cursor++ 让你使用**自己的 LLM API Key**（Anthropic / OpenAI / Google Gem
 ## Quick Start / 快速开始
 
 ```bash
-# Install / 安装
-npx @cometix/ccursor install
-
-# Restart Cursor, then open the Cursor++ sidebar panel to configure providers
-# 重启 Cursor，打开侧边栏 Cursor++ 面板配置服务商
-
-# Uninstall / 卸载
-npx @cometix/ccursor uninstall
-
-# Check installation status / 检查安装状态
-npx @cometix/ccursor status
+git clone --branch fanny7d/cursor-3259-nas https://github.com/fanny7d/CCursor.git
+cd CCursor/Cursor++
+pnpm install --frozen-lockfile
+cd ../installer
+npm ci
+npm run build:all
+node dist/cli.cjs check
+# Close Cursor before applying this fork's installer:
+node dist/cli.cjs install
+# Restart Cursor and configure your API provider in the Cursor++ panel.
 ```
 
 ---
@@ -163,11 +164,11 @@ Requires **Cursor IDE** + **Node.js >= 18**.
 
 ## Issues & Feedback / 问题与反馈
 
-This repository is for **issue tracking and documentation only** — source code is not published.
+This fork contains the extension and installer source for continued development. Upstream: [CometixSpace/CCursor](https://github.com/CometixSpace/CCursor).
 
-本仓库仅用于**问题追踪和文档发布** — 源代码不公开。
+本二开仓库包含扩展和安装器源码；保留上游历史、作者归属与许可证。
 
-- [Submit an Issue](https://github.com/CometixSpace/CCursor/issues)
+- [Fork Issues](https://github.com/fanny7d/CCursor/issues)
 - [LinuxDO Discussion](https://linux.do/t/topic/1926833)
 
 ---

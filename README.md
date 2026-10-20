@@ -1,3 +1,5 @@
+> **fanny7d development fork** — Cursor 3.25.9 / NAS BYOK compatibility fixes, with the upstream AGPL-3.0-or-later license retained. See [DEVELOPMENT.md](DEVELOPMENT.md) for build/install instructions and [the provider example](examples/providers.nas.example.json).
+
 <p align="center">
   English | <a href="README_CN.md">中文</a>
 </p>
@@ -27,16 +29,16 @@ Cursor++ lets you use **your own LLM API keys** (Anthropic, OpenAI, Google Gemin
 ## Quick Start
 
 ```bash
-# Install
-npx @cometix/ccursor install
-
-# Restart Cursor, then open the Cursor++ sidebar panel to configure providers
-
-# Uninstall
-npx @cometix/ccursor uninstall
-
-# Check installation status
-npx @cometix/ccursor status
+git clone --branch fanny7d/cursor-3259-nas https://github.com/fanny7d/CCursor.git
+cd CCursor/Cursor++
+pnpm install --frozen-lockfile
+cd ../installer
+npm ci
+npm run build:all
+node dist/cli.cjs check
+# Close Cursor before applying this fork's installer:
+node dist/cli.cjs install
+# Restart Cursor and configure your API provider in the Cursor++ panel.
 ```
 
 ---
@@ -140,9 +142,9 @@ Requires **Cursor IDE** + **Node.js >= 18**.
 
 ## Issues & Feedback
 
-This repository is for **issue tracking and documentation only** — source code is not published.
+This fork contains the extension and installer source for continued development. Upstream: [CometixSpace/CCursor](https://github.com/CometixSpace/CCursor).
 
-- [Submit an Issue](https://github.com/CometixSpace/CCursor/issues)
+- [Fork Issues](https://github.com/fanny7d/CCursor/issues)
 - [LinuxDO Discussion](https://linux.do/t/topic/1926833)
 
 ---
