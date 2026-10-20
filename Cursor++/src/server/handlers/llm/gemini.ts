@@ -54,6 +54,7 @@ export class GeminiProvider implements LLMProvider {
         const encoded = encodeGeminiRequestMessages(transformed);
 
         const genConfig: GenerateContentConfig = {
+            abortSignal: request.signal,
             maxOutputTokens: request.maxTokens ?? 8192,
         };
 
@@ -90,6 +91,7 @@ export class GeminiProvider implements LLMProvider {
         let inputTokens = 0;
         let outputTokens = 0;
         let sawToolCalls = false;
+        let finishReason: string | undefined;
         let syntheticToolCallCounter = 0;
         let wasThinking = false;
         let lastThoughtSignature: string | undefined;
@@ -102,6 +104,7 @@ export class GeminiProvider implements LLMProvider {
                 outputTokens = chunk.usageMetadata.candidatesTokenCount ?? 0;
             }
 
+            finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
             const parts = chunk.candidates?.[0]?.content?.parts;
             if (!parts) continue;
 
@@ -140,7 +143,7 @@ export class GeminiProvider implements LLMProvider {
 
         yield {
             type: 'done',
-            stopReason: sawToolCalls ? 'tool_use' : 'end_turn',
+            stopReason: finishReason === 'MAX_TOKENS' ? 'max_tokens' : ['SAFETY', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'RECITATION'].includes(finishReason ?? '') ? 'content_filter' : sawToolCalls ? 'tool_use' : 'end_turn',
             usage: { inputTokens, outputTokens },
         };
     }

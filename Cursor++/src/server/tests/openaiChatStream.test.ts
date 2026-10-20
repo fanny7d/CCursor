@@ -46,6 +46,10 @@ async function collectEvents(overrides: Partial<LLMStreamRequest> = {}): Promise
 }
 
 describe('openai chat streaming adapter', () => {
+  it.each([['length', 'max_tokens'], ['content_filter', 'content_filter']] as const)('preserves abnormal completion %s', async (reason, expected) => {
+    mockChunks([chunk([], reason)])
+    expect((await collectEvents()).at(-1)).toMatchObject({ type: 'done', stopReason: expected })
+  })
   beforeEach(() => {
     createCompletion.mockReset()
   })

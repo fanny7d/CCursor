@@ -125,11 +125,11 @@ export async function* handleRunRequest(
 
         yield* handleConversationRun(parsed, session);
     } catch (error) {
-        if (isAgentRunAbortedError(error)) {
+        if (isAgentRunAbortedError(error) || session?.controller.signal.aborted) {
             logger.info({
                 conversationId: parsed.conversationId,
-                execMessageId: error.execMessageId,
-                error: error.message,
+                execMessageId: isAgentRunAbortedError(error) ? error.execMessageId : undefined,
+                error: (error as Error).message,
             }, '[AGENT] run aborted by client exec control message');
             return;
         }

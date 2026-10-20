@@ -165,6 +165,12 @@ export function resolveProviderRuntime(modelId: string): ProviderRuntime {
             // Level 和 Budget 互斥: 客户端如果指定了其中一个,另一个必须清除
             let thinkingLevel = (thinkingOverride?.level as LLMStreamRequest['thinkingLevel']) ?? resolved.thinkingLevel;
             let thinkingBudgetTokens = thinkingOverride?.budget ?? resolved.thinkingBudgetTokens;
+            if (thinkingOverride?.level !== undefined) {
+                thinkingBudgetTokens = undefined;
+            }
+            else if (thinkingOverride?.budget !== undefined) {
+                thinkingLevel = undefined;
+            }
             if (thinkingLevel && thinkingBudgetTokens) {
                 thinkingBudgetTokens = undefined;
             }
@@ -185,6 +191,14 @@ export function resolveProviderRuntime(modelId: string): ProviderRuntime {
                     });
                 }
                 if (!thinkingLevel && thinkingBudgetTokens !== undefined) {
+                    if (resolved.provider === 'openai-chat' || resolved.provider === 'openai-responses') {
+                        throw makeByokConnectError({
+                            errorCode: ErrorDetails_Error.CUSTOM,
+                            title: 'Thinking budget is not supported by this provider',
+                            detail: 'OpenAI-compatible providers use effort levels. Choose an effort level instead of a token budget.',
+                            isRetryable: false,
+                        });
+                    }
                     if (thinkingBudgetTokens < 1024) {
                         throw makeByokConnectError({
                             errorCode: ErrorDetails_Error.CUSTOM,

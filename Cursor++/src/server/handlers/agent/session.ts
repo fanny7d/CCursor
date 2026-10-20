@@ -45,6 +45,8 @@ export interface AgentSession {
     notify: (() => void) | null;
     listeners: Set<() => void>;
     closed: boolean;
+    inputClosed?: boolean;
+    controller: AbortController;
     /**
      * 后台 job 注册表 (key = task_id 字符串形式: shell 用 shellId, subagent 用 agentId)。
      * 转后台时登记, AwaitShell 据此分流 readArgs / subagentAwaitArgs。
@@ -67,15 +69,20 @@ export interface AgentSession {
     cancelledReason?: string;
 }
 
+const activeSessions = new Set<AgentSession>();
+
 export function createEphemeralSession(requestId: string): AgentSession {
-    return {
+    const session: AgentSession = {
         requestId,
         messages: [],
         notify: null,
         listeners: new Set(),
         closed: false,
+        controller: new AbortController(),
         backgroundJobs: new Map(),
     };
+    activeSessions.add(session);
+    return session;
 }
 
 /**
@@ -132,6 +139,7 @@ function ingestSessionMessage(session: AgentSession, json: Record<string, unknow
         // 只认第一次 —— 客户端可能重复发,reason 以最先到达的为准
         if (session.cancelledReason === undefined) {
             session.cancelledReason = cancelReason;
+            session.controller.abort(new DOMException("Run cancelled", "AbortError"));
             logger.info({ requestId: session.requestId, reason: cancelReason }, '[CANCEL] client cancelled the run');
         }
     }
@@ -166,8 +174,20 @@ export function pushSessionMessage(session: AgentSession, json: Record<string, u
     ingestSessionMessage(session, json);
 }
 
+export function markSessionInputClosed(session: AgentSession): void {
+    session.inputClosed = true;
+    notifyAll(session);
+}
+
+export function closeAllSessions(): void {
+    for (const session of activeSessions) markSessionClosed(session);
+    sessions.clear();
+}
+
 export function markSessionClosed(session: AgentSession): void {
+    activeSessions.delete(session);
     session.closed = true;
+    session.controller.abort(new DOMException("Session closed", "AbortError"));
     notifyAll(session);
 }
 
@@ -229,7 +249,7 @@ export async function waitForMessageMatching(
     }
     // cancelled 与 closed 同样立即结束等待 —— 调用方 (wait.ts) 据
     // session.cancelledReason 区分二者,把前者转成 AgentRunAbortedError
-    if (session.closed || session.cancelledReason !== undefined) return null;
+    if (session.closed || session.inputClosed || session.cancelledReason !== undefined) return null;
 
     return new Promise<Record<string, unknown> | null>((resolve) => {
         let resolved = false;
@@ -258,7 +278,7 @@ export async function waitForMessageMatching(
                 resolve(session.messages.splice(i, 1)[0]);
                 return;
             }
-            if (session.closed || session.cancelledReason !== undefined) {
+            if (session.closed || session.inputClosed || session.cancelledReason !== undefined) {
                 cleanup();
                 resolve(null);
             }
@@ -290,8 +310,7 @@ export async function waitForInteractionResponse(
 export function closeSession(requestId: string): void {
     const session = sessions.get(requestId);
     if (session) {
-        session.closed = true;
-        notifyAll(session);
+        markSessionClosed(session);
         sessions.delete(requestId);
         logger.debug({ requestId }, '[SESSION] closed');
     }

@@ -1,3 +1,4 @@
+import { classifyUpstreamError } from '../upstreamDiagnostics'
 /**
  * ByokError → ConnectError 统一包装 (阶段 1, 最小可用)
  *
@@ -126,8 +127,10 @@ export function makeByokConnectError(opts: MakeByokErrorOptions): ConnectError {
  * 这个启发式是临时方案, 阶段 2 会被 provider 层的 HTTP status 判断替代。
  */
 export function makeProviderError(cause: unknown, extra?: Record<string, string>): ConnectError {
+  if (cause instanceof ConnectError) return cause
   const message = extractErrorMessage(cause)
-  const retryable = inferRetryable(message)
+  const classification = classifyUpstreamError(cause)
+  const retryable = classification.category === 'unknown' ? inferRetryable(message) : classification.retryable
   const errorCode = retryable
     ? ErrorDetails_Error.PROVIDER_ERROR
     : ErrorDetails_Error.CUSTOM
@@ -139,6 +142,8 @@ export function makeProviderError(cause: unknown, extra?: Record<string, string>
     additionalInfo: {
       errorClass: getErrorClass(cause),
       retryableHint: retryable ? 'true' : 'false',
+      category: classification.category,
+      ...(classification.status !== undefined ? { httpStatus: String(classification.status) } : {}),
       ...extra,
     },
     cause,

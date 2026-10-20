@@ -1,3 +1,5 @@
+import { makeByokConnectError } from '../errors'
+import { ErrorDetails_Error } from '../../gen/aiserver_v1_shared_pb'
 import type { AgentServerMessage } from '../../gen/agent_v1_pb'
 import type { LLMStreamEvent } from '../llm/types'
 /**
@@ -657,8 +659,17 @@ function resolveAgentMode(mode: string): AgentMode {
 /**
  * 将 LLM streaming events 翻译为 Cursor AgentServerMessage 帧序列
  */
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+async function nextOrHeartbeat<T>(next: Promise<T>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      next.then(value => ({ kind: 'next' as const, value })),
+      new Promise<{ kind: 'heartbeat' }>(resolve => { timer = setTimeout(() => resolve({ kind: 'heartbeat' }), ms) }),
+    ])
+  }
+  finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export async function* translateStream(
@@ -680,15 +691,13 @@ export async function* translateStream(
   let lastContentTime = startTime
   let idleHintSent = false
 
+  try {
   while (true) {
     const nextPromise = iterator.next()
     let nextResult: IteratorResult<LLMStreamEvent>
 
     while (true) {
-      const raced = await Promise.race([
-        nextPromise.then(value => ({ kind: 'next' as const, value })),
-        delay(keepAliveMs).then(() => ({ kind: 'heartbeat' as const })),
-      ])
+      const raced = await nextOrHeartbeat(nextPromise, keepAliveMs)
 
       if (raced.kind === 'heartbeat') {
         // 空窗期 idle hint: 有内容产出后长时间无新事件 → 注入信号让客户端转到 "Generating response"
@@ -793,6 +802,16 @@ export async function* translateStream(
         break
 
       case 'done': {
+        if (event.stopReason === 'max_tokens' || event.stopReason === 'content_filter') {
+          throw makeByokConnectError({
+            errorCode: ErrorDetails_Error.CUSTOM,
+            title: event.stopReason === 'max_tokens' ? 'Model output truncated' : 'Model output filtered',
+            detail: event.stopReason === 'max_tokens'
+              ? 'The upstream model reached its output limit. Increase the model output limit or ask for a shorter response.'
+              : 'The upstream provider filtered this response. Revise the request before trying again.',
+            isRetryable: false,
+          })
+        }
         yield stepCompleted(stepId, Date.now() - startTime)
 
         // tool_use 时不发 turnEnded — 后续还有 tool call loop
@@ -820,5 +839,10 @@ export async function* translateStream(
         break
       }
     }
+  }
+  }
+  finally {
+    if (iterator.return)
+      void Promise.resolve(iterator.return()).catch(() => {})
   }
 }

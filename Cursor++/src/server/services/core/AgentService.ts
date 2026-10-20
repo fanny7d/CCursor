@@ -31,7 +31,7 @@ import { registerCloneLineage } from '../../handlers/agent/cloneRegistry'
 import { ModelNotFoundError } from '../../handlers/models/mapper'
 import { makeByokConnectError, makeModelNotFoundError, makeProviderError } from '../../handlers/errors'
 import { ErrorDetails_Error } from '../../gen/aiserver_v1_shared_pb'
-import { closeSession, createEphemeralSession, getOrCreateSession, markSessionClosed, pushSessionMessage, waitForMessage } from '../../handlers/agent/session'
+import { closeSession, createEphemeralSession, getOrCreateSession, markSessionClosed, markSessionInputClosed, pushSessionMessage, waitForMessage } from '../../handlers/agent/session'
 import { logger } from '../../logger'
 
 /**
@@ -61,7 +61,7 @@ function isStreamDestroyedError(error: unknown): boolean {
 export default (router: ConnectRouter) => {
   router.service(AgentService, {
     /** Bidi streaming (HTTP/2) */
-    async* run(requests) {
+    async* run(requests, context) {
       logger.info('[SVC] AgentService/Run bidi started')
 
       const iterator = requests[Symbol.asyncIterator]()
@@ -102,6 +102,9 @@ export default (router: ConnectRouter) => {
       }
 
       const session = createEphemeralSession(`bidi-${Date.now()}`)
+      const disconnect = () => markSessionClosed(session)
+      context.signal.addEventListener('abort', disconnect, { once: true })
+      if (context.signal.aborted) disconnect()
       const pump = (async () => {
         try {
           while (true) {
@@ -115,9 +118,12 @@ export default (router: ConnectRouter) => {
           }
         }
         finally {
-          markSessionClosed(session)
+          markSessionInputClosed(session)
         }
-      })()
+      })().catch((error) => {
+        markSessionClosed(session)
+        logger.warn({ error: (error as Error).message }, '[SVC] Run bidi pump error')
+      })
 
       try {
         for await (const frame of handleRunRequest(firstMsg, session)) {
@@ -126,7 +132,7 @@ export default (router: ConnectRouter) => {
       }
       catch (error) {
         // 用户中断对话 → stream 已销毁, yield 写入失败 — 正常退出, 不触发 retry banner
-        if (isStreamDestroyedError(error)) {
+        if (isStreamDestroyedError(error) || session.controller.signal.aborted) {
           logger.info({ sessionId: session?.requestId }, '[SVC] Run bidi stream destroyed (client abort)')
           return
         }
@@ -142,14 +148,15 @@ export default (router: ConnectRouter) => {
       }
       finally {
         markSessionClosed(session)
-        await pump.catch((e) => {
+        context.signal.removeEventListener('abort', disconnect)
+        void pump.catch((e) => {
           logger.warn({ error: (e as Error).message }, '[SVC] Run bidi pump error')
         })
       }
     },
 
     /** Server streaming SSE (HTTP/1.1 降级) */
-    async* runSSE(req) {
+    async* runSSE(req, context) {
       const requestId = req.requestId
       if (!requestId) {
         // 缺 requestId 无法关联到 bidi session, 走静默 return 让 SSE 正常结束。
@@ -160,6 +167,9 @@ export default (router: ConnectRouter) => {
 
       logger.info({ requestId }, '[SVC] AgentService/RunSSE started')
       const session = getOrCreateSession(requestId)
+      const disconnect = () => markSessionClosed(session)
+      context.signal.addEventListener('abort', disconnect, { once: true })
+      if (context.signal.aborted) disconnect()
 
       try {
         const firstMsg = await waitForMessage(session)
@@ -218,7 +228,7 @@ export default (router: ConnectRouter) => {
       }
       catch (error) {
         // 用户中断对话 → stream 已销毁, yield 写入失败 — 正常退出
-        if (isStreamDestroyedError(error)) {
+        if (isStreamDestroyedError(error) || session.controller.signal.aborted) {
           logger.info({ requestId }, '[SVC] RunSSE stream destroyed (client abort)')
           return
         }
@@ -237,6 +247,7 @@ export default (router: ConnectRouter) => {
         throw connErr
       }
       finally {
+        context.signal.removeEventListener('abort', disconnect)
         closeSession(requestId)
       }
     },

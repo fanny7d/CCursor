@@ -1,3 +1,4 @@
+import { streamWithCancellation } from '../llm/cancellation';
 import { randomUUID } from 'crypto';
 import type { AgentServerMessage } from '../../gen/agent_v1_pb';
 import { workspaceUris, type ParsedRunRequest } from './protocol';
@@ -145,7 +146,8 @@ export async function* handleSummarizeAction(
 
     let lastHeartbeatTime = Date.now();
     try {
-        const llmStream = route.provider.stream({
+        const llmStream = streamWithCancellation(route.provider, {
+            signal: session?.controller.signal,
             model: route.model,
             thinking: false,
             messages: [
@@ -166,6 +168,7 @@ export async function* handleSummarizeAction(
             }
         }
     } catch (error) {
+        if (session?.controller.signal.aborted) throw error;
         logger.warn({ error: (error as Error).message, durationMs: Date.now() - llmStartTime }, '[SUMMARIZE] LLM failed, falling back to local summary');
     }
 

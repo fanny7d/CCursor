@@ -63,11 +63,12 @@ export class OpenAIChatProvider implements LLMProvider {
             params.reasoning_effort = request.thinkingLevel;
         }
 
-        const stream = await this.client.chat.completions.create(params);
+        const stream = await this.client.chat.completions.create(params, { signal: request.signal });
 
         const toolCalls = new Map<number, { id: string; name: string; args: string; started: boolean }>();
         let usage: { inputTokens: number; outputTokens: number; cacheReadTokens?: number } | null = null;
         let sawToolCalls = false;
+        let finishReason: string | null = null;
 
         for await (const chunk of stream) {
             if (chunk.usage) {
@@ -87,6 +88,7 @@ export class OpenAIChatProvider implements LLMProvider {
             }
 
             const choice = chunk.choices?.[0];
+            finishReason = choice?.finish_reason ?? finishReason;
             const delta = choice?.delta;
             if (!delta) continue;
 
@@ -137,7 +139,7 @@ export class OpenAIChatProvider implements LLMProvider {
 
         yield {
             type: 'done',
-            stopReason: sawToolCalls ? 'tool_use' : 'end_turn',
+            stopReason: finishReason === 'length' ? 'max_tokens' : finishReason === 'content_filter' ? 'content_filter' : sawToolCalls ? 'tool_use' : 'end_turn',
             usage: usage ?? { inputTokens: 0, outputTokens: 0 },
         };
     }

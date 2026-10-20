@@ -1,3 +1,4 @@
+import { streamWithCancellation } from '../llm/cancellation'
 import { SimulatedMsgReason, type AgentServerMessage } from '../../gen/agent_v1_pb'
 import type { LLMContentBlock, LLMMessage, LLMTool, LLMToolResultBlock } from '../llm/types'
 import type { ParsedRunRequest } from './protocol'
@@ -511,6 +512,7 @@ function flushPendingAssistantPrefix(params: {
  * 8. 返回 compacted 状态供后续 round 继续使用
  */
 async function* performInlineAutoSummarize(params: {
+  session: AgentSession | null
   parsed: ParsedRunRequest
   allBlobIds: string[]
   summaryArchiveIds: string[]
@@ -525,7 +527,7 @@ async function* performInlineAutoSummarize(params: {
   newUsedTokens: number
   newMessages: LLMMessage[]
 } | null> {
-  const { parsed, allBlobIds, summaryArchiveIds, usedTokensEstimate, contextTokenLimit, route } = params
+  const { session, parsed, allBlobIds, summaryArchiveIds, usedTokensEstimate, contextTokenLimit, route } = params
 
   const historyEntries = repairHistoryEntries(hydrateHistoryEntries(allBlobIds))
   if (historyEntries.length === 0)
@@ -556,7 +558,8 @@ async function* performInlineAutoSummarize(params: {
 
   let summaryText = ''
   try {
-    const llmStream = route.provider.stream({
+    const llmStream = streamWithCancellation(route.provider, {
+      signal: session?.controller.signal,
       model: route.model,
       thinking: false,
       messages: [
@@ -573,6 +576,7 @@ async function* performInlineAutoSummarize(params: {
     }
   }
   catch (error) {
+    if (session?.controller.signal.aborted) throw error
     logger.warn({ error: (error as Error).message }, '[AGENT] auto-summarize: LLM failed, using local fallback')
   }
 
@@ -974,7 +978,7 @@ export async function* handleConversationRun(
   for (let round = 0; ; round++) {
     // 轮次边界的中断检查 —— 上一轮工具刚跑完时客户端可能已经中断,
     // 此处拦下可避免白发一次 LLM 请求
-    if (session && isSessionCancelled(session)) {
+    if (session && (session.closed || isSessionCancelled(session))) {
       logger.info({
         conversationId: parsed.conversationId,
         round,
@@ -1034,7 +1038,7 @@ export async function* handleConversationRun(
         llmVisibleMcpToolsCount: llmVisibleMcpTools.length,
       }, '[AGENT] prepared provider conversation')
 
-      const llmStream = route.provider.stream(preparedRequest.request)
+      const llmStream = streamWithCancellation(route.provider, { ...preparedRequest.request, signal: session?.controller.signal })
 
       const translatedFrames = translateStream(llmStream, String(++stepCounter), (event) => {
         switch (event.type) {
@@ -1174,7 +1178,7 @@ export async function* handleConversationRun(
       // 客户端主动中断不是错误 —— 必须先于 makeProviderError 拦下,
       // 否则会被包成 ErrorDetails,在客户端渲染出一条 retry banner:
       // 用户只是发了新消息抢占当前生成,却看到"上一条失败了"。
-      if (isAgentRunAbortedError(e)) {
+      if (isAgentRunAbortedError(e) || session?.controller.signal.aborted) {
         logger.info({
           conversationId: parsed.conversationId,
           round,
@@ -1227,6 +1231,7 @@ export async function* handleConversationRun(
       const taskLaunches: TaskLaunchContext[] = []
       const nonTaskCalls: typeof pendingToolCalls = []
       for (const tc of pendingToolCalls) {
+        if (session) throwIfSessionCancelled(session)
         // dynamic profile 下 Task 落在 cursor namespace,LLM 侧名字是
         // CallDynamicTool,真实身份藏在 arguments 里。按 tc.name 分流会让
         // Task 掉进 Phase 2 串行路径,丢掉并发启动与 subagent 模型解析。
@@ -1255,6 +1260,7 @@ export async function* handleConversationRun(
 
       // ── Phase 2: 串行执行非 Task 工具（edit, shell, glob 等） ──
       for (const tc of nonTaskCalls) {
+        if (session) throwIfSessionCancelled(session)
         const toolFrames = runToolCall({
           toolCall: tc,
           availableMcpTools: parsed.mcpTools,
@@ -1386,6 +1392,7 @@ export async function* handleConversationRun(
         }, '[AGENT] auto-summarize: threshold exceeded, triggering inline compaction')
 
         const compactionResult = yield* performInlineAutoSummarize({
+          session,
           parsed,
           allBlobIds: allBlobIdsForCheckpoint,
           summaryArchiveIds: currentSummaryArchiveIds,
@@ -1424,12 +1431,12 @@ export async function* handleConversationRun(
       }
     }
     catch (e) {
-      if (isAgentRunAbortedError(e)) {
+      if (isAgentRunAbortedError(e) || session?.controller.signal.aborted) {
         logger.info({
           conversationId: parsed.conversationId,
           round,
-          execMessageId: e.execMessageId,
-          error: e.message,
+          execMessageId: isAgentRunAbortedError(e) ? e.execMessageId : undefined,
+          error: (e as Error).message,
         }, '[AGENT] tool call wait aborted by client; ending current run')
         return
       }

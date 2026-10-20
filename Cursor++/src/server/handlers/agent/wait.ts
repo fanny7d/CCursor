@@ -27,7 +27,7 @@ export function isAgentRunAbortedError(error: unknown): error is AgentRunAborted
  * round 边界。中断粒度因此收敛到单个事件而非整轮。
  */
 export function throwIfSessionCancelled(session: AgentSession): void {
-    if (session.cancelledReason === undefined)
+    if (!session.closed && session.cancelledReason === undefined)
         return;
     throw new AgentRunAbortedError(`client cancelled the run: ${session.cancelledReason}`);
 }

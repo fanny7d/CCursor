@@ -9,6 +9,7 @@
  * 目的: 离线时仍能注入 skills（如 canvas/review 等），保持功能可用。
  */
 import { logger } from '../logger'
+import { accountCacheKey } from './accountKey'
 import { readJsonOrNull, writeJsonAtomic } from './atomic'
 import { getManagedSkillsFilePath } from './paths'
 
@@ -17,6 +18,7 @@ const ENDPOINT = '/aiserver.v1.DashboardService/GetManagedSkills'
 const CACHE_TTL_MS = 10 * 60 * 1000
 
 interface CacheEntry {
+  key: string
   expiresAt: number
   data: Record<string, unknown>
 }
@@ -40,13 +42,14 @@ function buildForwardHeaders(clientHeaders: Headers): Record<string, string> {
   return out
 }
 
-function loadLocal(): Record<string, unknown> | null {
-  return readJsonOrNull(getManagedSkillsFilePath())
+function loadLocal(key: string): Record<string, unknown> | null {
+  const envelope = readJsonOrNull<{ accountKey: string, data: Record<string, unknown> }>(getManagedSkillsFilePath())
+  return envelope?.accountKey === key ? envelope.data : null
 }
 
-function persistLocal(data: Record<string, unknown>): void {
+function persistLocal(key: string, data: Record<string, unknown>): void {
   try {
-    writeJsonAtomic(getManagedSkillsFilePath(), data)
+    writeJsonAtomic(getManagedSkillsFilePath(), { schemaVersion: 1, accountKey: key, data })
   }
   catch (err) {
     logger.debug({ err: (err as Error).message }, '[SKILLS] persist to local failed (non-critical)')
@@ -57,43 +60,49 @@ export async function fetchManagedSkills(
   clientHeaders: Headers,
 ): Promise<Record<string, unknown>> {
   const now = Date.now()
-  if (cache && cache.expiresAt > now)
+  const key = accountCacheKey(clientHeaders)
+  if (cache?.key === key && cache.expiresAt > now)
     return cache.data
 
   try {
     const res = await fetch(`${OFFICIAL_BASE}${ENDPOINT}`, {
       method: 'POST',
+      signal: AbortSignal.timeout(8000),
       headers: buildForwardHeaders(clientHeaders),
       body: '{}',
     })
 
     if (!res.ok) {
       logger.warn({ status: res.status }, '[SKILLS] upstream GetManagedSkills failed')
-      return fallback()
+      return fallback(key)
     }
 
     const data = await res.json() as Record<string, unknown>
-    cache = { expiresAt: now + CACHE_TTL_MS, data }
+    cache = { key, expiresAt: now + CACHE_TTL_MS, data }
     const count = Array.isArray(data.skills) ? data.skills.length : 0
     logger.info({ count }, '[SKILLS] upstream GetManagedSkills fetched')
-    persistLocal(data)
+    persistLocal(key, data)
     return data
   }
   catch (err) {
     logger.warn({ err: (err as Error).message }, '[SKILLS] upstream GetManagedSkills error')
-    return fallback()
+    return fallback(key)
   }
 }
 
-function fallback(): Record<string, unknown> {
-  if (cache)
+function fallback(key: string): Record<string, unknown> {
+  if (cache?.key === key)
     return cache.data
-  const local = loadLocal()
+  const local = loadLocal(key)
   if (local) {
     const count = Array.isArray((local as any).skills) ? (local as any).skills.length : 0
-    cache = { expiresAt: Date.now() + CACHE_TTL_MS, data: local }
+    cache = { key, expiresAt: Date.now() + CACHE_TTL_MS, data: local }
     logger.info({ count }, '[SKILLS] loaded managed skills from local cache')
     return local
   }
   return {}
+}
+
+export function resetManagedSkillsCacheForTests(): void {
+  cache = null
 }

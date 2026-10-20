@@ -85,7 +85,7 @@ export class OpenAIResponsesProvider implements LLMProvider {
       params.include = ['reasoning.encrypted_content']
     }
 
-    const stream = await this.client.responses.create(params)
+    const stream = await this.client.responses.create(params, { signal: request.signal })
 
     // 跟踪活跃的 function_call items (item_id → { callId, name, hadDeltas })
     const activeCalls = new Map<string, { callId: string, name: string, hadDeltas: boolean }>()
@@ -155,11 +155,9 @@ export class OpenAIResponsesProvider implements LLMProvider {
           }
           yield {
             type: 'done',
-            stopReason: sawToolCalls
-              ? 'tool_use'
-              : r.status === 'incomplete'
-                ? 'max_tokens'
-                : 'end_turn',
+            stopReason: r.status === 'incomplete'
+              ? r.incomplete_details?.reason === 'content_filter' ? 'content_filter' : 'max_tokens'
+              : sawToolCalls ? 'tool_use' : 'end_turn',
             usage: {
               inputTokens: r.usage?.input_tokens ?? 0,
               outputTokens: r.usage?.output_tokens ?? 0,
@@ -178,8 +176,8 @@ export class OpenAIResponsesProvider implements LLMProvider {
         case 'response.incomplete': {
           yield {
             type: 'done',
-            stopReason: 'max_tokens',
-            usage: { inputTokens: 0, outputTokens: 0 },
+            stopReason: event.response.incomplete_details?.reason === 'content_filter' ? 'content_filter' : 'max_tokens',
+            usage: { inputTokens: event.response.usage?.input_tokens ?? 0, outputTokens: event.response.usage?.output_tokens ?? 0 },
           }
           break
         }

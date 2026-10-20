@@ -51,6 +51,7 @@ export interface LLMUsage {
 
 /** 统一的 streaming 请求参数 */
 export interface LLMStreamRequest {
+  signal?: AbortSignal
   model: string
   messages: LLMMessage[]
   tools?: LLMTool[]

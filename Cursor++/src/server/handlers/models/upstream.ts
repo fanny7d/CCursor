@@ -1,9 +1,10 @@
+import { accountCacheKey } from '../../config/accountKey'
 /**
  * 透传到官方 Cursor 后端拉取真实订阅模型列表。
  *
  * - 端点: https://api2.cursor.sh/aiserver.v1.AiService/AvailableModels
  * - 鉴权: 直接复用客户端原始 Authorization + x-cursor-* 头, server 不持有 token
- * - 缓存: 全局 5 分钟 TTL, 跨多次调用共享 (无需按 token 维度细分)
+ * - 缓存: 全局 5 分钟 TTL, 按账号和请求参数隔离
  *
  * 解析方式: ConnectRPC 默认走 application/json (Connect Protocol),
  * 我们用 fetch + Connect-style POST + fromJson 解码,避免引入 Connect client。
@@ -52,8 +53,9 @@ export async function fetchUpstreamAvailableModels(
   clientHeaders: Headers,
   request: AvailableModelsRequest,
 ): Promise<AvailableModelsResponse | null> {
-  // 缓存键不区分 token,但区分请求形态(additionalModelNames 等会影响响应)
+  // 缓存键包含账号摘要及请求形态(additionalModelNames 等会影响响应)
   const cacheKey = JSON.stringify({
+    account: accountCacheKey(clientHeaders),
     isNightly: request.isNightly,
     includeLongContextModels: request.includeLongContextModels,
     excludeMaxNamedModels: request.excludeMaxNamedModels,
@@ -71,13 +73,14 @@ export async function fetchUpstreamAvailableModels(
     const requestJson = toJson(AvailableModelsRequestSchema, request)
     const res = await fetch(UPSTREAM_URL, {
       method: 'POST',
+      signal: AbortSignal.timeout(8000),
       headers: buildForwardHeaders(clientHeaders),
       body: JSON.stringify(requestJson),
     })
 
     if (!res.ok) {
       logger.warn({ status: res.status, statusText: res.statusText }, '[MODEL] upstream availableModels failed')
-      return cache?.response ?? null
+      return cache?.key === cacheKey ? cache.response : null
     }
 
     const json = await res.json()
@@ -94,7 +97,7 @@ export async function fetchUpstreamAvailableModels(
   }
   catch (err) {
     logger.warn({ err: (err as Error).message }, '[MODEL] upstream availableModels error')
-    return cache?.response ?? null
+    return cache?.key === cacheKey ? cache.response : null
   }
 }
 
