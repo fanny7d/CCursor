@@ -9,6 +9,8 @@
  */
 import type { ProviderType as DefaultsProviderType } from '../../data/defaults'
 import { findToolByAlias, listBuiltinLlmTools } from '../agent/toolkit/registry'
+import { CALCULATE_TOOL } from '../agent/toolkit/definitions/Calculate'
+import { usesGrokResponsesTools } from './grokProfile'
 import { getProviderToolCatalog } from './toolCatalog'
 import type { LLMContentBlock, LLMMessage } from './types'
 
@@ -391,8 +393,15 @@ function sanitizeUnsupportedHistoricalTools(
   messages: LLMMessage[],
   targetProvider: ProviderType,
   diagnostics?: RepairDiagnostics,
+  targetModel?: string,
 ): LLMMessage[] {
-  const builtinToolNames = listBuiltinLlmTools(targetProvider as DefaultsProviderType).map(tool => tool.name)
+  // Match the actual model profile, not just the wire protocol. Otherwise
+  // valid Grok Read/Write/Calculate history is textified as unsupported and
+  // teaches the model to repeat inert tool-call text instead of invoking tools.
+  const builtins = usesGrokResponsesTools(targetProvider, targetModel)
+    ? [...listBuiltinLlmTools('anthropic'), CALCULATE_TOOL]
+    : listBuiltinLlmTools(targetProvider as DefaultsProviderType)
+  const builtinToolNames = builtins.map(tool => tool.name)
   const allowedToolNames = new Set(builtinToolNames)
   const allowedHistoricalToolNames = new Set<string>(allowedToolNames)
   const canonicalIntents = getProviderToolCatalog(targetProvider).getCanonicalToolIntents()
@@ -597,7 +606,7 @@ function transformMessagesDetailed(
   diagnostics.signedThinkingDowngraded = normalized.signedThinkingDowngraded
 
   const repairedCanonical = repairConversationHistoryDetailed(normalized.messages)
-  const sanitizedCanonical = sanitizeUnsupportedHistoricalTools(repairedCanonical.messages, targetProvider, repairedCanonical.diagnostics)
+  const sanitizedCanonical = sanitizeUnsupportedHistoricalTools(repairedCanonical.messages, targetProvider, repairedCanonical.diagnostics, targetModel)
   Object.assign(diagnostics, repairedCanonical.diagnostics, {
     targetProvider,
     idNormalizations: diagnostics.idNormalizations,

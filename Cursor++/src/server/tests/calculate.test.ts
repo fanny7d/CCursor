@@ -8,8 +8,10 @@ import { partitionCursorBuiltinTools } from '../handlers/agent/dynamicTools'
 import { createEphemeralSession } from '../handlers/agent/session'
 import { calculate } from '../handlers/agent/toolkit/definitions/Calculate'
 import { runToolCall } from '../handlers/agent/toolRuntime'
+import { encodeResponsesInput } from '../handlers/llm/conversationCodec'
 import { resolveProviderRuntime } from '../handlers/llm/providerRuntime'
 import { openAIStateStrategy } from '../handlers/llm/stateStrategy'
+import { transformMessages } from '../handlers/llm/transformMessages'
 
 const baseline = loadProviders()
 setProvidersForTests({ ...baseline, providers: [...baseline.providers, {
@@ -107,4 +109,26 @@ it.each(['grok-response-tests', 'grok-message-tests', 'gpt-5.4-medium'])('runs c
     expect(pendingToolResults[0].isError).toBe(true)
     expect(pendingToolResults[0].content).toContain('not available')
   }
+})
+
+it('preserves Grok structured file/calculator history through Responses encoding without exposing it to other profiles', () => {
+  const history: LLMMessage[] = [
+    { role: 'user', content: 'read the current job, calculate, write and verify' },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'read-1', name: 'Read', input: { path: 'job.json' } }] },
+    { role: 'tool', toolCallId: 'read-1', toolName: 'Read', content: '{"values":[156,48,72,99,101]}' },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'calc-1', name: 'Calculate', input: { operation: 'sum', operands: [156, 48, 72, 99, 101] } }] },
+    { role: 'tool', toolCallId: 'calc-1', toolName: 'Calculate', content: '{"result":"476","exact":true}' },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'write-1', name: 'Write', input: { path: 'report.json', contents: '{"total":476}' } }] },
+    { role: 'tool', toolCallId: 'write-1', toolName: 'Write', content: 'File written' },
+    { role: 'user', content: 'process a different job after restart' },
+  ]
+  const transformed = transformMessages(history, 'openai-responses', undefined, 'grok-4.7')
+  const encoded = encodeResponsesInput(transformed)
+  expect(JSON.stringify(encoded)).not.toContain('previous unsupported tool call')
+  const calls = encoded.items.filter(item => 'type' in item && item.type === 'function_call')
+  const results = encoded.items.filter(item => 'type' in item && item.type === 'function_call_output')
+  expect(calls.map(item => 'name' in item ? item.name : '')).toEqual(['Read', 'Calculate', 'Write'])
+  expect(calls.map(item => 'call_id' in item ? item.call_id : '')).toEqual(results.map(item => 'call_id' in item ? item.call_id : ''))
+  expect(JSON.stringify(transformMessages(history, 'openai-responses', undefined, 'gpt-6-luna'))).toContain('previous unsupported tool call: Calculate')
+  expect(JSON.stringify(transformMessages(history, 'anthropic', undefined, 'grok-4.7'))).toContain('previous unsupported tool call: Calculate')
 })

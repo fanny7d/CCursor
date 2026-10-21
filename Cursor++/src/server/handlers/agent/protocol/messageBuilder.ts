@@ -203,6 +203,7 @@ function buildSystemPrompt(parsed: ParsedRunRequest, promptProfile: ProviderProm
     base += `\n\n<grok_responses_tools>
 - Use Read, Write and Edit for file operations. Shell is for system commands, not a substitute for available file tools. Respect user restrictions on every turn.
 - For arithmetic results, call Calculate with the actual operands from the latest input. Do not guess or reuse totals from previous turns. Copy the exact result; use a JSON number only when safely representable.
+- Historical notes such as [previous unsupported tool call: ...] are not tool invocations. Invoke the currently declared tools for the current task.
 - If the user asks to verify a written file, read it back with Read before claiming verification. A successful Write alone is not a read-back check.
 </grok_responses_tools>`
   }

@@ -1,5 +1,6 @@
 import type { Provider } from '../../runtime-config';
 import { resolveModel } from '../models/mapper';
+import { usesGrokResponsesTools } from './grokProfile';
 import { CALCULATE_TOOL } from '../agent/toolkit/definitions/Calculate';
 import { getProviderToolCatalog, type ProviderToolCatalog } from './toolCatalog';
 
@@ -40,7 +41,7 @@ export function resolvePromptProfile(modelId: string): ProviderPromptProfile {
     }
 
     const resolved = resolveModel(modelId);
-    if (resolved.provider === 'openai-responses' && /^(?:(?:xai|x-ai|grok)\/)?grok-/i.test(resolved.apiModel)) {
+    if (usesGrokResponsesTools(resolved.provider, resolved.apiModel)) {
         const base = getProviderToolCatalog('anthropic', 'main');
         const toolCatalog: ProviderToolCatalog = {
             ...base,
