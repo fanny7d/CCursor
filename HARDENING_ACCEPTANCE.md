@@ -70,4 +70,14 @@ CI 覆盖 Linux、macOS Intel、Windows；本地验证为 macOS ARM64。CI 使�
 - 本地安装器 80 项测试通过，包含真实 renderer 副本、系统 codesign / plutil、原生动态库加载与 ACL 保留；无失败、无跳过。
 - 在完整 Cursor 3.26.13 副本中执行 14 个命令步骤，覆盖首次安装、重复更新、卸载、重装，以及模拟官方整应用替换后的 `check → verify（预期失败）→ repair → verify`。五个安装／卸载阶段后均通过深度签名校验与真实 Electron 的无界面加载；原厂 Electron 框架哈希及合成 NAS / Max 配置保持不变。
 
-现用 NAS、Max、Cursor 设置和已安装扩展不参与写入测试；完整 Cursor 副本使用独立合成配置，实际 GUI 证据范围仍为前述已安装的 0.1.0。
+上述副本测试使用独立合成配置。以下为完成副本验证后，对现用应用进行的实际更新与 GUI 验收。
+
+### 安装器 0.1.1 现用应用实测（2026-10-21）
+
+- 使用构建 `a05d8a5ad2b15aeae3fc69ccefd925fe9e1450ef` 的安装器，在现用 Cursor 3.26.13 上实际执行 `update`；自动完整应用备份、签名、替换与校验成功，无需人工补签。`verify` 和最终 `doctor` 均通过，应用可正常启动并再次完整退出、重启。
+- 扩展仍为 0.1.0 / 构建 `9d4cd6f9435e21cdefb8e4ce382e48185738da9a`，其代码未随此次安装器更新改变。
+- 更新过程保留 providers、routes、Cursor settings 及独立 Codex config / auth 的原始字节。按用户要求，更新后仅修改目标模型的 `displayName` 为 `Fanny7d GPT-6-Luna`；内部模型 ID、API 模型 `gpt-6-luna`、`thinkingLevel=max`、上游凭据及客户端标识均保留。
+- 原生 Agent 在新隔离目录读取含随机 nonce 的输入、创建结果并重新读取校验，总和为 1046。随机 nonce 未放入提示词；重启后再次使用原生工具读取两个文件，结果一致，界面继续显示新名称和 Max。
+- 两轮 UI 任务共对应 6 次 NAS Chat 请求，全部 HTTP 200；有时限、仅导出模型与推理参数的只读检查捕获 4 次实际转发请求，均为 `model=gpt-6-luna`、`reasoning.effort=max`。此项验证发送参数，响应未回显推理档位。
+- NAS 镜像、配置哈希及容器重启次数不变；Cursor++ 日志无 warning / error。最终重启会话的 Cursor 主程序、renderer 和 extension host 无 error；4 条 warning 为启动时等待搜索服务及隔离验收目录未初始化 Git 的提示。
+- 完整备份、截图、请求参数摘要和验收记录仅保存在本机，未将私人地址、密钥或原始报文上传仓库。
