@@ -166,6 +166,18 @@ Messages 的 7 轮真实工具读写、两次重启及 NAS 直连验收见
 扩展 0.1.1 会拒绝 Add File 中缺少 `+` 前缀的错误补丁，返回可重试的格式错误，
 更新和删除补丁也必须完整符合单文件格式，避免静默丢弃内容后将空文件、部分写入或部分删除误报为成功。
 
+## Grok Responses 的工具适配
+
+扩展 0.1.2 将 `openai-responses` 中的 `grok-*` 模型单独适配为 Read / Write / Edit 工具与提示词，
+传输、加密推理项、工具结果及历史仍使用原生 Responses 格式。新增 Calculate 只在此模型配置中暴露，
+通过本地有界精确算术执行，不使用 eval、Shell、文件或网络；小数使用整数分数计算，循环小数返回精确分数。
+现有 Messages 与 GPT 工具目录不添加 Calculate，GPT 的 OpenAI 提示词、ApplyPatch 与 Max 配置保持独立。
+
+新增服务商参考 [`examples/providers.grok-responses.example.json`](examples/providers.grok-responses.example.json)，
+保留原有服务商对象和路由。不要默认加入 `X-Sub2API-Grok-Client-Tool-Cache: off`；该开关的效果应单独验证。
+NAS 容器的镜像版本标签可能与实际二进制不一致，排查模型和 effort 能力时应核对二进制构建提交、
+实际用量记录和出站请求，不能只按镜像标签选择源码。
+
 ## 验收边界
 
 0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，

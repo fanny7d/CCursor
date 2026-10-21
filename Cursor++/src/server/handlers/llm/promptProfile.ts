@@ -1,5 +1,6 @@
 import type { Provider } from '../../runtime-config';
 import { resolveModel } from '../models/mapper';
+import { CALCULATE_TOOL } from '../agent/toolkit/definitions/Calculate';
 import { getProviderToolCatalog, type ProviderToolCatalog } from './toolCatalog';
 
 export interface ProviderPromptProfile {
@@ -39,6 +40,24 @@ export function resolvePromptProfile(modelId: string): ProviderPromptProfile {
     }
 
     const resolved = resolveModel(modelId);
+    if (resolved.provider === 'openai-responses' && /^(?:(?:xai|x-ai|grok)\/)?grok-/i.test(resolved.apiModel)) {
+        const base = getProviderToolCatalog('anthropic', 'main');
+        const toolCatalog: ProviderToolCatalog = {
+            ...base,
+            provider: resolved.provider,
+            variant: 'main',
+            promptVocabulary: [...base.promptVocabulary, 'Calculate'],
+            observedTranscriptTools: [...base.observedTranscriptTools, 'Calculate'],
+            listBuiltins: () => [...base.listBuiltins(), CALCULATE_TOOL],
+            getCanonicalToolIntents: () => [...base.getCanonicalToolIntents(), { id: 'calculate', aliases: ['Calculate'] }],
+        };
+        return {
+            provider: resolved.provider, variant: 'main', systemPromptStyle: 'anthropic-main',
+            observedSystemPromptHashes: ['byok-grok-responses-v1'],
+            promptVocabulary: toolCatalog.promptVocabulary, toolCatalog,
+            apiModel: resolved.apiModel, thinking: resolved.thinking,
+        };
+    }
     switch (resolved.provider) {
         case 'openai-chat':
         case 'openai-responses': {

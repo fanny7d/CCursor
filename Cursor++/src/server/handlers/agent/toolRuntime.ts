@@ -1,4 +1,6 @@
 import type { AgentServerMessage } from '../../gen/agent_v1_pb';
+import { calculate } from './toolkit/definitions/Calculate';
+import { resolvePromptProfile } from '../llm/promptProfile';
 import { logger } from '../../logger';
 import type { ProviderRoundContext } from '../llm/providerRuntime';
 import type { LLMContentBlock, LLMMessage } from '../llm/types';
@@ -209,6 +211,25 @@ async function* runToolCallInner(params: Parameters<typeof runToolCall>[0]): Asy
     }
 
     yield toolCallStarted(tc.callId, cursorToolType, startedArgs, modelCallId);
+
+    if (executionToolName === 'Calculate') {
+        let rawToolResult;
+        try {
+            if (!params.currentModelId || !resolvePromptProfile(params.currentModelId).promptVocabulary.includes('Calculate'))
+                throw new Error('Calculate is not available for this model profile');
+            const content = JSON.stringify(calculate(sanitizedInput));
+            rawToolResult = { result: { case: 'success', value: { content: [{ content: { case: 'text', value: { text: content } } }], isError: false } } };
+        } catch (error) {
+            rawToolResult = { result: { case: 'error', value: { message: error instanceof Error ? error.message : String(error) } } };
+        }
+        const finalized = finalizeToolCall({
+            roundContext: params.roundContext, messages: params.messages, cursorToolType,
+            toolName: tc.name, callId: tc.callId, startedArgs, rawToolResult,
+            input: sanitizedInput, modelCallId,
+        });
+        yield finalized.frame;
+        return;
+    }
 
     // communicateUpdateToolCall: 服务端自动完成 (不走 exec)
     // 子代理通过此工具报告进度和最终摘要, 客户端从帧中提取 finalSummary

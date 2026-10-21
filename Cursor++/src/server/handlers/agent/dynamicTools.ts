@@ -36,6 +36,7 @@ export const CURSOR_DYNAMIC_NAMESPACE_DESCRIPTION = "Native Cursor tools for thi
 /** 对齐 dynamicToolProfile=final 的核心静态保护集合（按本项目 canonicalName 映射）。 */
 const FINAL_PROFILE_STATIC_TOOLS = new Set([
     'AskQuestion',
+    'Calculate',
     'ApplyPatch',
     'CreatePlan',
     'Edit',

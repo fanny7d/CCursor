@@ -192,11 +192,19 @@ function buildSystemPrompt(parsed: ParsedRunRequest, promptProfile: ProviderProm
       base += `\n\n${buildDynamicToolsSection(dynamicCatalog, parsed.supportsMcpAuth === true)}`
     }
   }
-  else if (promptProfile.provider === 'openai-chat' || promptProfile.provider === 'openai-responses') {
+  else if (promptProfile.systemPromptStyle === 'openai-main') {
     base = buildOpenAISystemPrompt(parsed, promptProfile)
   }
   else {
     base = buildAnthropicSystemPrompt(parsed, promptProfile)
+  }
+
+  if (promptProfile.toolCatalog.promptVocabulary.includes('Calculate')) {
+    base += `\n\n<grok_responses_tools>
+- Use Read, Write and Edit for file operations. Shell is for system commands, not a substitute for available file tools. Respect user restrictions on every turn.
+- For arithmetic results, call Calculate with the actual operands from the latest input. Do not guess or reuse totals from previous turns. Copy the exact result; use a JSON number only when safely representable.
+- If the user asks to verify a written file, read it back with Read before claiming verification. A successful Write alone is not a read-back check.
+</grok_responses_tools>`
   }
 
   const mode = parsed.mode.replace('AGENT_MODE_', '').toLowerCase()

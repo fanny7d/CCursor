@@ -26,6 +26,7 @@ import { FetchMcpResourceTool } from './definitions/FetchMcpResource';
 import { SwitchModeTool } from './definitions/SwitchMode';
 import { CallMcpToolTool } from './definitions/CallMcpTool';
 import { GetDynamicToolsTool } from './definitions/GetDynamicTools';
+import { CalculateTool } from './definitions/Calculate';
 import { ApplyPatchTool } from './definitions/ApplyPatch';
 import { CreatePlanTool } from './definitions/CreatePlan';
 import { UpdateCurrentStepTool } from './definitions/UpdateCurrentStep';
@@ -59,6 +60,7 @@ const TOOL_REGISTRY: ToolRegistryEntry[] = [
     CallMcpToolTool,
     GetDynamicToolsTool,
     CreatePlanTool,
+    CalculateTool,
     // SemanticSearchTool,
 ];
 

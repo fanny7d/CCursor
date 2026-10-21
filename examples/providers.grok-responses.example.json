@@ -1,0 +1,39 @@
+{
+  "providers": [
+    {
+      "id": "nas-grok-responses",
+      "name": "NAS Grok Responses",
+      "type": "openai-responses",
+      "baseUrl": "https://nas.example.com/v1",
+      "auth": {
+        "kind": "apiKey",
+        "value": "REPLACE_WITH_YOUR_GROK_GROUP_API_KEY"
+      },
+      "headers": {
+        "User-Agent": "CursorPlus-NAS/0.0.15"
+      },
+      "models": [
+        {
+          "id": "nas-grok47-responses",
+          "apiModel": "grok-4.7",
+          "displayName": "Fanny7d Grok 4.7 Responses",
+          "thinking": true,
+          "thinkingLevel": "xhigh",
+          "parameters": {
+            "reasoning": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "supportsAgent": true,
+          "supportsImages": true,
+          "contextTokenLimit": 200000,
+          "maxOutputTokens": 16384,
+          "defaultOn": true
+        }
+      ]
+    }
+  ]
+}
