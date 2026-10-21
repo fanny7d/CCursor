@@ -62,6 +62,8 @@ export function parsePatch(patch: string): ParsedPatch | null {
   // *** Delete File: <path>
   if (headerLine.startsWith('*** Delete File: ')) {
     const path = headerLine.slice('*** Delete File: '.length).trim()
+    if (!path || bodyLines.length !== 1)
+      return null
     return { action: 'delete', path }
   }
 
@@ -84,13 +86,13 @@ export function parsePatch(patch: string): ParsedPatch | null {
         j++
         continue
       }
-      // 遇到下一个 *** 标记 → 结束
+      // A second file section or unknown marker must not become a partial success.
       if (bodyLines[j].startsWith('***'))
-        break
+        return null
 
       const [chunk, consumed] = parseUpdateFileChunk(bodyLines, j, chunks.length === 0)
       if (!chunk)
-        break
+        return null
       chunks.push(chunk)
       j += consumed
     }

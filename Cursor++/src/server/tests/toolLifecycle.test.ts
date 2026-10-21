@@ -252,7 +252,9 @@ it.each([
   '*** Begin Patch\n*** Add File: /workspace/report.json\n{"total":42}\n*** End Patch',
   '*** Begin Patch\n*** Add File: /workspace/report.json\n+{"total":42}\nnot a patch line\n*** End Patch',
   '*** Begin Patch\n*** Add File: /workspace/report.json\n+{"total":42}\n*** Add File: /workspace/other.txt\n+unexpected\n*** End Patch',
-])('runToolCall rejects malformed Add File content without issuing filesystem operations (%#)', async (patch) => {
+  '*** Begin Patch\n*** Update File: /workspace/report.json\n@@\n-old\n+new\nunprefixed content\n*** End Patch',
+  '*** Begin Patch\n*** Delete File: /workspace/report.json\n*** Add File: /workspace/other.txt\n+unexpected\n*** End Patch',
+])('runToolCall rejects malformed patches without issuing filesystem operations (%#)', async (patch) => {
   const roundContext = createTestRoundContext(anthropicStateStrategy)
   const frames: AgentServerMessage[] = []
   let execId = 0
