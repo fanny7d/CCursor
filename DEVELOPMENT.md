@@ -182,6 +182,10 @@ NAS 容器的镜像版本标签可能与实际二进制不一致，排查模型�
 0.1.2 的真实 Responses 算术、工具调用、历史恢复、重启和 NAS 直连，以及原有 Messages / GPT Max 回归，
 见 [`GROK_RESPONSES_ACCEPTANCE.md`](GROK_RESPONSES_ACCEPTANCE.md)。
 
+0.1.3 补充 Grok Responses 的请求前和纯文本轮次摘要检查，保留最新用户请求；
+不改变 Messages / GPT 的分支。复杂任务仍有漏调用及虚报完成，详见
+[`GROK_LONG_CONVERSATION_ACCEPTANCE.md`](GROK_LONG_CONVERSATION_ACCEPTANCE.md)。
+
 ## 验收边界
 
 0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
