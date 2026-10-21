@@ -1,5 +1,7 @@
 # Grok Responses 复杂任务与长对话验证
 
+后续上游核查、参数 schema 修复和仍未通过的原生场景见 [GROK_UPSTREAM_INVESTIGATION.md](GROK_UPSTREAM_INVESTIGATION.md)。
+
 2026-10-21；Cursor 3.26.13、macOS ARM64，扩展 0.1.3 / 安装器 0.1.4，实际运行代码 `41c2c86aa3a0906dc8c88c24baa65a5cc80d6263`。
 
 ## 结论与修复

@@ -196,3 +196,7 @@ NAS 容器的镜像版本标签可能与实际二进制不一致，排查模型�
 独立 Codex 扩展已卸载，Cursor++ 不依赖它；历史 Codex 兼容脚本未纳入本 fork。
 
 Cursor 更新会覆盖应用补丁。更新后先检查新版本匹配情况，并验证实际请求到达自己的上游。
+
+0.1.4 扩展 / 0.1.5 安装器收紧 Grok Responses Calculate 的字符串操作数 schema，
+匹配执行器的十进制约束；并补充[上游核查和剩余失败](GROK_UPSTREAM_INVESTIGATION.md)。
+该修复不代表复杂 Grok 工作流已稳定通过；Messages、GPT 和现有配置不变。
