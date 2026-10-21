@@ -13,6 +13,7 @@ import { cacheBlob, getCachedBlob } from './blobStore'
 import { emitFinalCheckpoint, emitRollingCheckpoint } from './checkpointManager'
 import { ContextTokenTracker } from './tokenCounter'
 import { createCompactionArtifacts, estimateMessagesTokens, formatMessageForSummary, planCompaction } from './compactionStrategy'
+import { usesGrokResponsesTools } from '../llm/grokProfile'
 import { extractPlainTextContent, flushMessageBlobs, hydrateHistoryEntries, rebuildConversationHistory, repairHistoryEntries, sendAndCacheBlob } from './historyManager'
 import { buildMessages, workspaceUris } from './protocol'
 import { checkpoint, editToolCallStreamDelta, heartbeat, kvMessage, partialToolCall, summary, summaryCompleted, summaryStarted, translateStream, userMessageAppended } from './stream'
@@ -521,6 +522,7 @@ async function* performInlineAutoSummarize(params: {
   messages: LLMMessage[]
   route: ReturnType<typeof resolveProviderRuntime>
   readPaths: string[]
+  preserveLatestUser?: boolean
 }): AsyncGenerator<AgentServerMessage, {
   newBlobIds: string[]
   newSummaryArchiveIds: string[]
@@ -533,7 +535,7 @@ async function* performInlineAutoSummarize(params: {
   if (historyEntries.length === 0)
     return null
 
-  const compactionPlan = planCompaction(historyEntries)
+  const compactionPlan = planCompaction(historyEntries, { preserveLatestUser: params.preserveLatestUser })
   if (compactionPlan.summarizeEntries.length === 0) {
     logger.info({ conversationId: parsed.conversationId }, '[AGENT] auto-summarize: nothing to compact')
     return null
@@ -975,6 +977,38 @@ export async function* handleConversationRun(
   let lastAssistantContent: LLMContentBlock[] | undefined
   let stepCounter = 0
 
+  // The original loop only compacts after tool execution. A text-only Grok
+  // turn can therefore leave an oversized history for the next request.
+  // Keep the existing Messages/GPT paths unchanged while covering both
+  // boundaries for the Grok Responses profile.
+  const compactGrokBoundary = async function* (): AsyncGenerator<AgentServerMessage, void> {
+    if (!usesGrokResponsesTools(route.provider.name, route.model))
+      return
+    usedTokensEstimate = Math.max(usedTokensEstimate, estimateMessagesTokens(messages))
+    if (!shouldTriggerCompaction(usedTokensEstimate, contextTokenLimit)) return
+    if (session) throwIfSessionCancelled(session)
+    const flushed = yield* flushMessageBlobs(
+      kvMessage, messages, nextBlobbedMessageIndex, blobCounter, blobIds,
+    )
+    nextBlobbedMessageIndex = flushed.nextIndex
+    blobCounter = flushed.blobCounter
+    const result = yield* performInlineAutoSummarize({
+      session, parsed, allBlobIds: [...parsed.historyBlobIds, ...blobIds],
+      summaryArchiveIds: currentSummaryArchiveIds, usedTokensEstimate, contextTokenLimit,
+      messages, route, readPaths: [...readContext.readPaths], preserveLatestUser: true,
+    })
+    if (!result) return
+    messages = result.newMessages
+    parsed.historyBlobIds = result.newBlobIds
+    currentSummaryArchiveIds = result.newSummaryArchiveIds
+    usedTokensEstimate = result.newUsedTokens
+    blobIds = []
+    blobCounter = 0
+    nextBlobbedMessageIndex = messages.length
+  }
+
+  yield* compactGrokBoundary()
+
   for (let round = 0; ; round++) {
     // 轮次边界的中断检查 —— 上一轮工具刚跑完时客户端可能已经中断,
     // 此处拦下可避免白发一次 LLM 请求
@@ -1212,6 +1246,7 @@ export async function* handleConversationRun(
         for (const blob of turnBlobs)
           yield cacheAndBuildKvBlob(++blobCounter, blob)
       }
+      yield* compactGrokBoundary()
       break
     }
 

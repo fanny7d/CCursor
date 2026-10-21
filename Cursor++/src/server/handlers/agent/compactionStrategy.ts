@@ -92,7 +92,7 @@ export function estimateMessagesTokens(messages: Array<LLMMessage | { role: stri
     return messages.reduce((sum, message) => sum + estimateTextTokens(typeof message.content === 'string' ? message.content : formatMessageForSummary(message as LLMMessage)), 0);
 }
 
-export function planCompaction(entries: HistoryEntry[]): CompactionPlan {
+export function planCompaction(entries: HistoryEntry[], options?: { preserveLatestUser?: boolean }): CompactionPlan {
     const leading: HistoryEntry[] = [];
     let index = 0;
 
@@ -116,6 +116,16 @@ export function planCompaction(entries: HistoryEntry[]): CompactionPlan {
     if (summarizeCount === 0 && body.length > COMPACTION_MEDIUM_BODY_THRESHOLD) {
         keepTailCount = COMPACTION_MEDIUM_BODY_KEEP_TAIL;
         summarizeCount = Math.max(0, body.length - keepTailCount);
+    }
+
+    // Preflight compaction must not summarize away the request we are about
+    // to answer, even when a short history contains one very large user turn.
+    if (options?.preserveLatestUser) {
+        let latestUserIndex = body.length - 1;
+        while (latestUserIndex >= 0 && body[latestUserIndex]?.message.role !== 'user')
+            latestUserIndex--;
+        if (latestUserIndex >= 0)
+            summarizeCount = Math.min(summarizeCount, latestUserIndex);
     }
 
     // tool 配对完整性: 确保切分点不在 tool call/result 之间。
