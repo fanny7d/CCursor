@@ -1,7 +1,7 @@
 # 二开改进状态
 
 本轮版本：**0.1.0 NAS fork**，分支 `fanny7d/cursor-3259-nas`。
-当前运行环境的 NAS、Max、Cursor 设置及已安装扩展保持原状；本轮更新源码与构建产物。
+当前运行环境已安装 Cursor++ 0.1.0，并通过 macOS ARM64 / Cursor 3.26.13 原生 Agent 验收；NAS、Max 及关键配置保持原内容。
 
 ## 已完成的优先事项
 
@@ -29,9 +29,10 @@
 0.1.0 的本地访问协议需要扩展、renderer 和 Agent 补丁同步更新。
 **关闭所有 Cursor 窗口，使用本版安装器 update；不要只替换 VSIX。**
 
-真实 NAS UI 验收基线仍是 0.0.15，见 `LOCAL_NAS_ACCEPTANCE.md`。
-0.1.0 当前覆盖本地协议／HTTP 集成与真实应用文件副本，不等同于其他 Cursor 版本、Remote SSH
+0.1.0 的真实 NAS 原生 Agent 验收见 `HARDENING_ACCEPTANCE.md`；0.0.15 历史基线保留在 `LOCAL_NAS_ACCEPTANCE.md`。
+实际 GUI 验收范围为 macOS ARM64 / Cursor 3.26.13，不等同于其他 Cursor 版本、Remote SSH
 或三种操作系统真实 GUI 的验收。应用更新后仍须执行兼容检查及真实模型、工具操作验收。
+macOS 本地签名修复目前需要人工处理，具体原因和安全边界已记录在验收文档中。
 
 本轮保护不会代替用户的整应用备份。恢复日志工作区应保留到事务完成；磁盘损坏或恢复材料被系统清除时需使用整应用备份。
 独立 local-mode 工具保持其原有作用域，不属于主安装／卸载事务。

@@ -131,7 +131,7 @@ api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
 0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
 见 [`LOCAL_NAS_ACCEPTANCE.md`](LOCAL_NAS_ACCEPTANCE.md)。
 0.1.0 已在真实应用文件副本完成升级／卸载验证，并有本地 HTTP / 协议集成测试；
-本轮没有替换当前运行版本，不能把它当作 0.1.0 GUI 已验收的证据。
+0.1.0 已在 macOS ARM64 / Cursor 3.26.13 的原生 Agents UI 完成文件读写、重启恢复及 NAS Max 转发参数验收，见 [`HARDENING_ACCEPTANCE.md`](HARDENING_ACCEPTANCE.md)。其中记录了官方自动更新带来的 macOS 资源签名问题、本机签名修复及其适用边界；安装器尚不自动处理本地签名。
 私人地址、密钥、完整日志和聊天截图不随源码发布。
 独立 Codex 扩展已卸载，Cursor++ 不依赖它；历史 Codex 兼容脚本未纳入本 fork。
 
