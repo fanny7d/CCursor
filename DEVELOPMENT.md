@@ -158,6 +158,8 @@ Sub2API 0.1.173 的 Responses 路由支持请求头
 上游 [issue #4486](https://github.com/Wei-Shaw/sub2api/issues/4486) 记录过该路由影响本地工具选择的问题。
 该版本的 Messages 桥接路径未读取此请求头；不要将其当作 Messages 的修复开关。
 本地 Responses 对照仍出现错误结果及违背工具限制，未作为推荐配置保留。
+Messages 的 7 轮真实工具读写、两次重启及 NAS 直连验收见
+[`GROK_TOOL_ACCEPTANCE.md`](GROK_TOOL_ACCEPTANCE.md)。
 两条路径均不能保证模型每次正确调用工具或计算无误，需使用每轮新建且不可预测的文件、
 独立核对结果，并验证重启后的续聊。
 
