@@ -44,7 +44,7 @@ export async function status() {
   // Extension
   const extInstalled = isExtensionInstalled(paths);
   console.log(extInstalled ? ok('Extension installed') : fail('Extension not installed'));
-  console.log(isRuntimeCompatPatched(paths) ? ok('HTTP/1.1 timeout and retrieval punycode fixes active') : fail('Runtime compatibility fixes missing'));
+  console.log(isRuntimeCompatPatched(paths) ? ok('HTTP/1.1 timeout, retrieval punycode and shell deadline fixes active') : fail('Runtime compatibility fixes missing'));
 
   // Inject (desktop)
   if (existsSync(paths.workbenchJs)) {

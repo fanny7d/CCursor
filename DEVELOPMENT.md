@@ -200,3 +200,8 @@ Cursor 更新会覆盖应用补丁。更新后先检查新版本匹配情况，�
 0.1.4 扩展 / 0.1.5 安装器收紧 Grok Responses Calculate 的字符串操作数 schema，
 匹配执行器的十进制约束；并补充[上游核查和剩余失败](GROK_UPSTREAM_INVESTIGATION.md)。
 该修复不代表复杂 Grok 工作流已稳定通过；Messages、GPT 和现有配置不变。
+
+安装器 0.1.6 修复 macOS 主进程被系统授权阻塞后，shell 环境解析结果已完成却被超时回调抢先丢弃的问题。
+仅对明显延后的 macOS 计时器提供一次 1 秒结果处理窗口，保留真正慢 shell 的超时和错误处理；
+不修改 dotfiles 或用户设置。安装前检查、checksum、完整应用签名与卸载回滚覆盖新增主进程补丁。
+见 [SHELL_STARTUP_ACCEPTANCE.md](SHELL_STARTUP_ACCEPTANCE.md)。

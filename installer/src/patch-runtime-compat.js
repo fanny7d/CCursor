@@ -4,6 +4,7 @@ import { join, dirname } from 'path';
 import * as acorn from 'acorn';
 import { createBackup, restoreBackup } from './backup.js';
 import { findAgentHostNetworkTargets } from './patch-agent-host.js';
+import { checkShellEnvironment, isShellEnvironmentPatched, patchShellEnvironment, restoreShellEnvironment } from './patch-shell-env.js';
 
 export const RUNTIME_COMPAT_TAG = 'runtime-compat';
 export const HTTP1_TIMEOUT_MARKER = '/*BYOK-HTTP1-TIMEOUT-DEFAULT*/';
@@ -65,6 +66,7 @@ function assetPath(name) {
 }
 
 export function checkRuntimeCompat(paths, log) {
+  checkShellEnvironment(paths, log);
   const network = targets(paths);
   if (network.length < 2) throw new Error('Missing agent network compatibility targets');
   for (const path of network) {
@@ -80,6 +82,7 @@ export function isRuntimeCompatPatched(paths) {
   const network = targets(paths);
   const retrieval = retrievalFile(paths);
   return network.length >= 2
+    && isShellEnvironmentPatched(paths)
     && network.every(path => readFileSync(path, 'utf8').includes(HTTP1_TIMEOUT_MARKER))
     && existsSync(retrieval) && readFileSync(retrieval, 'utf8').includes(PUNYCODE_MARKER);
 }
@@ -90,6 +93,7 @@ export function patchRuntimeCompat(paths, log) {
   // Prepare every change and verify assets before any mutation.
   const edits = targets(paths).map(path => ({ path, source: patchHttp1TimeoutSource(readFileSync(path, 'utf8')) }));
   edits.push({ path: retrieval, source: patchPunycodeSource(readFileSync(retrieval, 'utf8')) });
+  patchShellEnvironment(paths, log);
   for (const { path, source } of edits) {
     if (source === readFileSync(path, 'utf8')) continue;
     createBackup(path, RUNTIME_COMPAT_TAG, log);
@@ -99,6 +103,7 @@ export function patchRuntimeCompat(paths, log) {
 }
 
 export function restoreRuntimeCompat(paths, log) {
+  restoreShellEnvironment(paths, log);
   for (const path of [...targets(paths), retrievalFile(paths)])
     restoreBackup(path, RUNTIME_COMPAT_TAG, log);
   for (const name of ['ccursor-punycode.cjs', 'ccursor-punycode.LICENSE.txt'])

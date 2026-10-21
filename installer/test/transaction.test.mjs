@@ -5,14 +5,17 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createBackup, restoreBackup } from '../src/backup.js';
-import { treeFiles, withInstallationTransaction, recoverInstallation, JOURNAL_FILE } from '../src/transaction.js';
+import { applicationFiles, treeFiles, withInstallationTransaction, recoverInstallation, JOURNAL_FILE } from '../src/transaction.js';
 import { digest, writeInstallationManifest, validateInstallation } from '../src/installation-state.js';
+import { patchShellEnvironment, SHELL_ENV_MARKER } from '../src/patch-shell-env.js';
+import { shellEnvSource } from './fixtures/shell-env.mjs';
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ccursor-txn-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const appRoot = join(root, 'app'), configDir = join(root, 'config');
   const paths = { appRoot, cursorVersion: '3.25.9', hasGlass: true,
+    mainJs: join(appRoot, 'out/main.js'),
     productJson: join(appRoot, 'product.json'), workbenchJs: join(appRoot, 'out/workbench.js'),
     glassJs: join(appRoot, 'out/glass.js'), extensionHostJs: join(appRoot, 'out/extensionHost.js'),
     alwaysLocalMain: join(appRoot, 'extensions/cursor-always-local/dist/main.js'),
@@ -21,6 +24,7 @@ function fixture(t) {
   const files = [
     [paths.productJson, '{"commit":"vendor-build-a","checksums":{}}'], [join(appRoot, 'package.json'), '{"version":"3.25.9"}'],
     [paths.workbenchJs, 'original renderer'], [paths.glassJs, 'original glass'],
+    [paths.mainJs, 'original main process'],
     [join(paths.cursor2plusDir, 'package.json'), '{"name":"cursor2plus"}'], [join(paths.cursor2plusDir, 'old.js'), 'working extension'],
     [join(configDir, 'routes.json'), '{"byokMode":1,"server":{"host":"127.0.0.7","port":41000}}\r\n'],
     [join(configDir, 'providers.json'), '{"providers":[{"id":"NAS","thinkingLevel":"max","key":"synthetic-only"}]}\r\n'],
@@ -64,6 +68,25 @@ test('successful commit replaces all prepared components and retains private con
   assert.deepEqual(readFileSync(join(configDir, 'providers.json')), providers);
   assert.deepEqual(readFileSync(join(configDir, 'routes.json')), routes);
   assert.equal(existsSync(join(paths.appRoot, JOURNAL_FILE)), false);
+  assert.doesNotThrow(() => validateInstallation(paths));
+});
+
+test('shell deadline patch participates in atomic commit, rollback and the installation manifest without changing NAS/Max bytes', async t => {
+  const { root, paths, configDir } = fixture(t);
+  writeFileSync(paths.mainJs, shellEnvSource);
+  writeFileSync(paths.productJson, '{"commit":"vendor-build-a","checksums":{"main.js":"before"}}');
+  const before = snapshot(root), providers = readFileSync(join(configDir, 'providers.json'));
+  const prepareShell = async staged => {
+    patchShellEnvironment(staged);
+    writeInstallationManifest(staged, applicationFiles(staged));
+  };
+  await assert.rejects(withInstallationTransaction(paths, prepareShell, { configDir,
+    beforeCommit() { throw Error('injected shell commit failure'); },
+  }), /injected shell commit failure/);
+  assert.deepEqual(snapshot(root), before);
+  await withInstallationTransaction(paths, prepareShell, { configDir });
+  assert.ok(readFileSync(paths.mainJs, 'utf8').includes(SHELL_ENV_MARKER));
+  assert.deepEqual(readFileSync(join(configDir, 'providers.json')), providers);
   assert.doesNotThrow(() => validateInstallation(paths));
 });
 

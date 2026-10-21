@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import { patchHttp1TimeoutSource, patchPunycodeSource, patchRuntimeCompat, restoreRuntimeCompat, isRuntimeCompatPatched, HTTP1_TIMEOUT_MARKER, PUNYCODE_MARKER } from '../src/patch-runtime-compat.js';
+import { shellEnvSource } from './fixtures/shell-env.mjs';
 
 const call = 'this.transportFactory.setHttp2SessionEstablishTimeoutMs(await async function(t){try{const r=await t.getDynamicConfigValue("http2_session_establish_timeout"),e=r?.timeoutMs;return"number"==typeof e&&Number.isFinite(e)?e<=0?0:Math.max(e,5e3):2e4}catch(r){return t.log.error("Failed to get the HTTP/2 session establishment timeout from Statsig",r),2e4}}(this.host))';
 
@@ -73,12 +74,14 @@ test('file patch and rollback restore both agent transports and retrieval exactl
     const alwaysLocalMain = join(appRoot, 'extensions/cursor-always-local/dist/main.js');
     const agentHostMain = join(appRoot, 'extensions/cursor-agent-host/dist/main.js');
     const retrieval = join(appRoot, 'extensions/cursor-retrieval/dist/main.js');
+    const mainJs = join(appRoot, 'out/main.js');
+    const productJson = join(appRoot, 'product.json');
     const network = `/* agent.v1.AgentService RunSSE BidiAppend AiConnectTransportHandler HTTP/1.1 transport created with network settings */\n${call}`;
-    for (const [path, content] of [[alwaysLocalMain, call], [agentHostMain, network], [retrieval, 'module.exports=require("punycode");']]) {
+    for (const [path, content] of [[alwaysLocalMain, call], [agentHostMain, network], [retrieval, 'module.exports=require("punycode");'], [mainJs, shellEnvSource], [productJson, '{}']]) {
       mkdirSync(join(path, '..'), { recursive: true });
       writeFileSync(path, content);
     }
-    const paths = { appRoot, alwaysLocalMain, agentHostMain };
+    const paths = { appRoot, alwaysLocalMain, agentHostMain, mainJs, productJson };
     patchRuntimeCompat(paths);
     assert.equal(isRuntimeCompatPatched(paths), true);
     patchRuntimeCompat(paths);
@@ -87,6 +90,7 @@ test('file patch and rollback restore both agent transports and retrieval exactl
     assert.equal(readFileSync(alwaysLocalMain, 'utf8'), call);
     assert.equal(readFileSync(agentHostMain, 'utf8'), network);
     assert.equal(readFileSync(retrieval, 'utf8'), 'module.exports=require("punycode");');
+    assert.equal(readFileSync(mainJs, 'utf8'), shellEnvSource);
     assert.deepEqual(readdirSync(join(retrieval, '..')), ['main.js']);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

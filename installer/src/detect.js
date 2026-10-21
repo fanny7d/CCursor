@@ -94,6 +94,7 @@ function buildPaths(appRoot) {
     appRoot,
     cursorVersion,
     hasGlass,
+    mainJs: join(appRoot, 'out', 'main.js'),
     workbenchJs: join(appRoot, 'out', 'vs', 'workbench', 'workbench.desktop.main.js'),
     glassJs: join(appRoot, 'out', 'vs', 'workbench', 'workbench.glass.main.js'),
     alwaysLocalMain: join(appRoot, 'extensions', 'cursor-always-local', 'dist', 'main.js'),
