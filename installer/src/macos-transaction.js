@@ -174,6 +174,18 @@ export async function withMacOSBundleTransaction(paths, prepare, { configDir = C
     try {
       await beforeCommit?.('before-app-move');
       renameSync(bundle, locations.original);
+      // The official updater does not honor our lock. Inspect the directory we
+      // actually moved, not only the pathname checked immediately beforehand.
+      const movedHash = bundleDigest(locations.original);
+      if (movedHash !== baseline) {
+        if (movedHash !== null) {
+          record.before = movedHash;
+          const nextRecord = join(locations.workspace, 'recovery-next.json');
+          writeFileSync(nextRecord, JSON.stringify(record), { mode: 0o600 });
+          renameSync(nextRecord, locations.recovery);
+        }
+        throw new Error('Cursor changed at application swap; the latest original application will be restored');
+      }
       await beforeCommit?.('after-app-move');
       renameSync(locations.prepared, bundle);
       await beforeCommit?.('after-app-replace');
@@ -189,8 +201,11 @@ export async function withMacOSBundleTransaction(paths, prepare, { configDir = C
       if (!signatureHealthy(inspectMacOSSignature(bundle, { run }))) throw new Error('Installed macOS signature is invalid');
       validateInstallation(paths);
       assertNativeCompatibility(bundle, paths.cursorVersion, run);
-      for (const op of operations)
-        if (bundleDigest(join(configDir, op.name)) !== op.after) throw new Error('Configuration changed during commit verification');
+      for (const name of configNames) {
+        const operation = operations.find(op => op.name === name);
+        const expected = operation ? operation.after : before.get(name);
+        if (bundleDigest(join(configDir, name)) !== expected) throw new Error('Configuration changed during commit verification');
+      }
       await beforeCommit?.('verified');
       rmSync(macOSJournal(bundle));
       journalOwned = false;

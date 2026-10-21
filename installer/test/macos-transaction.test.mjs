@@ -62,14 +62,19 @@ function prepare(paths, configDir) {
 
 test('macOS swap preserves NAS/Max bytes, keeps a complete original, and signs only outside-journal preparation', async t => {
   const f = fixture(t), native = fakeNative();
+  writeFileSync(join(f.configDir, 'web-tools.json'), '{"synthetic":true}', { mode: 0o600 });
   const before = bundleDigest(f.bundle), config = bundleDigest(f.configDir);
   const bytes = ['providers.json', 'routes.json'].map(n => readFileSync(join(f.configDir, n)));
   const logs = [];
-  await withMacOSBundleTransaction(f.paths, prepare, { configDir: f.configDir, run: native.run, log: s => logs.push(s) });
+  await withMacOSBundleTransaction(f.paths, (paths, configDir) => {
+    prepare(paths, configDir);
+    rmSync(join(configDir, 'web-tools.json'));
+  }, { configDir: f.configDir, run: native.run, log: s => logs.push(s) });
   assert.equal(readFileSync(f.paths.workbenchJs, 'utf8'), 'prepared renderer');
   ['providers.json', 'routes.json'].forEach((n, i) => assert.deepEqual(readFileSync(join(f.configDir, n)), bytes[i]));
   assert.equal(existsSync(macOSJournal(f.bundle)), false);
   assert.equal(existsSync(join(f.paths.appRoot, '.ccursor-transaction.json')), false);
+  assert.equal(existsSync(join(f.configDir, 'web-tools.json')), false);
   const backup = logs.find(s => s.includes('retained at ')).split('retained at ')[1];
   assert.equal(bundleDigest(join(backup, 'original.app')), before);
   ['providers.json', 'routes.json'].forEach((n, i) => assert.deepEqual(readFileSync(join(backup, 'original-config', n)), bytes[i]));
@@ -127,6 +132,24 @@ test('a failed rollback preserves journal and refuses to overwrite a concurrent 
   assert.equal(existsSync(macOSJournal(f.bundle)), true);
   assert.throws(() => recoverMacOSBundle(f.bundle, { configDir: f.configDir, run: fakeNative().run }), /Concurrent Cursor update/);
   assert.equal(readFileSync(f.paths.workbenchJs, 'utf8'), 'concurrent edit');
+});
+
+test('official update completing exactly at the application swap is restored instead of replaced by stale preparation', async t => {
+  const f = fixture(t), config = bundleDigest(f.configDir);
+  await assert.rejects(withMacOSBundleTransaction(f.paths, prepare, { configDir: f.configDir, run: fakeNative().run,
+    beforeCommit(phase) { if (phase === 'before-app-move') writeFileSync(f.paths.workbenchJs, 'new official application'); } }), /changed at application swap/);
+  assert.equal(readFileSync(f.paths.workbenchJs, 'utf8'), 'new official application');
+  assert.equal(bundleDigest(f.configDir), config);
+  assert.equal(existsSync(macOSJournal(f.bundle)), false);
+});
+
+test('editing an unchanged NAS configuration during commit is detected and retained while the application rolls back', async t => {
+  const f = fixture(t), before = bundleDigest(f.bundle);
+  await assert.rejects(withMacOSBundleTransaction(f.paths, prepare, { configDir: f.configDir, run: fakeNative().run,
+    beforeCommit(phase) { if (phase === 'after-config') writeFileSync(join(f.configDir, 'providers.json'), 'new user configuration'); } }), /Configuration changed during commit verification/);
+  assert.equal(bundleDigest(f.bundle), before);
+  assert.equal(readFileSync(join(f.configDir, 'providers.json'), 'utf8'), 'new user configuration');
+  assert.equal(existsSync(macOSJournal(f.bundle)), false);
 });
 
 for (const phase of ['after-app-move', 'after-app-replace', 'after-config']) test(`killed process at ${phase} is recoverable through the platform recovery entrypoint`, t => {
