@@ -32,6 +32,8 @@ export async function status() {
   console.log(`Cursor: ${paths.appRoot}\n`);
 
   const diagnosticReport = await collectDiagnostics(paths);
+  console.log(`Cursor compatibility: ${diagnosticReport.compatibility.state}`);
+  if (diagnosticReport.macOSSignature.applicable) console.log(`macOS signature: ${diagnosticReport.macOSSignature.valid ? 'valid' : 'repair required'}; ${diagnosticReport.macOSSignature.kind}; hardened runtime: ${diagnosticReport.macOSSignature.hardenedRuntime}`);
   console.log(`Installed extension: ${diagnosticReport.installation.extensionVersion}; build: ${diagnosticReport.installation.recordedBuild}`);
   console.log(`Extension SHA-256: ${diagnosticReport.installation.extensionSha256 || 'unavailable'}`);
   console.log(`Runtime health: ${diagnosticReport.runtime.health}; running version: ${diagnosticReport.runtime.version}`);

@@ -48,8 +48,10 @@ function mutation(name) {
 `;
 const installBundle = join(fixtureRoot, 'install.cjs');
 await buildFixture('install.js', installBundle, {
-  'transaction.js': `${common} export async function withInstallationTransaction(paths,prepare){return prepare(paths,state().configDir);} export function applicationFiles(){return [];} export function treeFiles(){return [];}`,
-  'installation-state.js': `${common} export function writeInstallationManifest(){}`,
+  'transaction.js': `${common} export function applicationFiles(){return [];} export function treeFiles(){return [];}`,
+  'platform-transaction.js': `${common} export function assertPlatformReady(){if(state().running)throw Error('Close all Cursor windows');} export function platformSignatureNeedsRepair(){return state().badSignature;} export async function withPlatformTransaction(paths,prepare){state().transactions=(state().transactions||0)+1;return prepare(paths,state().configDir);}`,
+  'verify.js': `export function verifyPreparedInstallation(){}`,
+  'installation-state.js': `${common} export function validateInstallation(){} export function writeInstallationManifest(){}`,
   'detect.js': `${common} export function findCursorPathsDetailed(){ return {paths:state().paths,diagnostic:{}}; } export function formatDiagnostic(){return 'fixture';}`,
   'check.js': `${common} export async function check(){state().events.push('check:start');await new Promise(resolve=>setImmediate(resolve));if(state().failPreflight)throw Error('fixture preflight failed');state().events.push('check:complete');}`,
   'extension-embed.js': `${common} export function isExtensionInstalled(){return state().installed;} export function installExtension(){mutation('extension');}`,
@@ -120,12 +122,26 @@ test('existing backups without the extension reject installation before any writ
   assert.equal(existsSync(state.mutationFile), false);
 });
 
+test('running Cursor is rejected before compatibility checks or any mutation', async () => {
+  const state = startFixture('running-cursor', { running: true });
+  await assert.rejects(install({ refreshExtension: true }), /Close all Cursor/);
+  assert.deepEqual(state.events, []);
+  assert.equal(existsSync(state.mutationFile), false);
+});
+
+test('fully patched application with an invalid native signature still enters the repair transaction', async () => {
+  const state = startFixture('invalid-signature', { fullyPatched: true, badSignature: true });
+  await install();
+  assert.equal(state.transactions, 1);
+  assert.deepEqual(state.events, ['check:start', 'check:complete']);
+});
+
 const cliBundle = join(fixtureRoot, 'cli.cjs');
 await buildFixture('cli.js', cliBundle, {
   'install.js': `export async function install(options){console.log('INSTALL_OPTIONS='+JSON.stringify(options));}`,
   'uninstall.js': `export async function uninstall(){throw Error('update must not uninstall first');}`,
 });
-for (const command of ['update', 'upgrade']) {
+for (const command of ['update', 'upgrade', 'repair']) {
   test(`${command} refreshes the extension without uninstalling`, () => {
     const result = spawnSync(process.execPath, [cliBundle, command], { encoding: 'utf8', timeout: 10000 });
     assert.ifError(result.error);

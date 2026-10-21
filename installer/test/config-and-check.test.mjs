@@ -62,7 +62,7 @@ for (const byokMode of [0, 1]) {
 function runCheck(appRoot) {
   return spawnSync(process.execPath, [join(fixtureRoot, 'cli.cjs'), 'check'], {
     encoding: 'utf8',
-    env: { ...process.env, CCURSOR_CURSOR_ROOT: appRoot },
+    env: { ...process.env, CCURSOR_CURSOR_ROOT: appRoot, CCURSOR_DATA_DIR: join(fixtureRoot, 'isolated-config') },
     timeout: 10000,
   });
 }

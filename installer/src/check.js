@@ -9,6 +9,7 @@ import { checkProxy39Patch, needsProxy39Patch } from './patch-proxy-39.js';
 import { checkAgentHostGatePatch } from './patch-agent-host-gate.js';
 import { findTarget, isInjectPatched, prepareRendererSource } from './patch-inject.js';
 import { checkRuntimeCompat } from './patch-runtime-compat.js';
+import { compatibilityState } from './compatibility-state.js';
 
 const ok = s => `\x1b[32m✓ ${s}\x1b[0m`;
 const fail = s => `\x1b[31m✗ ${s}\x1b[0m`;
@@ -25,6 +26,10 @@ export async function check(overridePaths) {
 
   console.log(info(`Cursor: ${paths.appRoot}`));
   console.log();
+  const compatibility = compatibilityState(paths);
+  console.log(info(`Installation compatibility: ${compatibility.state} (Cursor ${compatibility.currentCursorVersion})`));
+  if (compatibility.state === 'cursor-updated') console.log(info('Official Cursor update detected. Recheck every patch target, then run "ccursor update"; old-build backups will not be reused.'));
+  if (compatibility.state === 'modified-or-mixed-build') throw new Error('Modified or mixed Cursor build detected; restore a matching application before installing.');
 
   let allOk = true;
   try { checkRuntimeCompat(paths, s => console.log(info(s))); }

@@ -1,4 +1,4 @@
-> **0.1.0 NAS fork:** close all Cursor windows and use this fork's installer `update` so the local access protocol and extension upgrade together. See [DEVELOPMENT.md](DEVELOPMENT.md).
+> **NAS fork：安装器 0.1.1 / 扩展 0.1.0**。退出 Cursor 后运行本 fork 的 `update`，同步检查兼容性、安装补丁并完成 macOS 本地签名。官方更新后先执行 `verify`；失败时退出 Cursor 再执行 `repair`。详见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
 > **fanny7d 二开分支**：保留上游 AGPL-3.0-or-later 许可，包含 Cursor 3.25.9 / NAS BYOK 兼容修复。构建、安装与二开说明见 [DEVELOPMENT.md](DEVELOPMENT.md)，通用配置见 [examples/providers.nas.example.json](examples/providers.nas.example.json)。
 

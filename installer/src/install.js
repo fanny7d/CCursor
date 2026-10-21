@@ -27,8 +27,10 @@ import { patchRuntimeCompat, isRuntimeCompatPatched } from './patch-runtime-comp
 import { check } from './check.js';
 // delete-fix 已移除 — 3.2.11 原生 tombstoneDeletedComposer 已覆盖
 import { releaseDefaults } from './release-defaults.js';
-import { applicationFiles, treeFiles, withInstallationTransaction } from './transaction.js';
-import { writeInstallationManifest } from './installation-state.js';
+import { applicationFiles, treeFiles } from './transaction.js';
+import { assertPlatformReady, platformSignatureNeedsRepair, withPlatformTransaction } from './platform-transaction.js';
+import { validateInstallation, writeInstallationManifest } from './installation-state.js';
+import { verifyPreparedInstallation } from './verify.js';
 import { loadRoutes } from './routes.js';
 import { join } from 'path';
 
@@ -52,9 +54,11 @@ export async function install({ refreshExtension = false } = {}) {
   }
   info(`Cursor: ${paths.appRoot}`);
   info(`Version: ${paths.cursorVersion}${paths.hasGlass ? ' (glass)' : ''}`);
+  assertPlatformReady(paths);
   // Run supported compatibility checks before defaults, extension files or
   // application bundles are changed. A failed check rejects the install.
   await check();
+  validateInstallation(paths);
 
   const extInstalled = isExtensionInstalled(paths);
   const desktopPatched = existsSync(paths.workbenchJs) && isInjectPatched(readFileSync(paths.workbenchJs, 'utf-8'));
@@ -69,12 +73,12 @@ export async function install({ refreshExtension = false } = {}) {
     || hasBackup(paths.alwaysLocalSingletonJs) || hasBackup(paths.extensionHostJs) || agentHostBackups;
 
   if (extInstalled && hookInjected && alPatched && agentHostPatched && proxy39Ok && agentGateOk && isRuntimeCompatPatched(paths)) {
-    if (refreshExtension) {
-      await withInstallationTransaction(paths, async (staged) => {
-        installExtension(staged, info);
+    if (refreshExtension || platformSignatureNeedsRepair(paths)) {
+      await withPlatformTransaction(paths, async (staged) => {
+        if (refreshExtension) installExtension(staged, info);
         writeInstallationManifest(staged, [...applicationFiles(staged), ...treeFiles(staged.cursor2plusDir)]);
-      });
-      ok('Extension refreshed; application patches and configuration preserved');
+      }, { log: info, validatePrepared: verifyPreparedInstallation });
+      ok('Application verified; patches and configuration preserved');
       warn('Restart Cursor for changes to take effect.');
       return;
     }
@@ -92,7 +96,7 @@ export async function install({ refreshExtension = false } = {}) {
   console.log('');
 
   // 1. 释放默认配置到 ~/.ccursor/ (尊重已有用户文件)
-  await withInstallationTransaction(paths, async (staged, configDir) => {
+  await withPlatformTransaction(paths, async (staged, configDir) => {
     releaseDefaults(info, { configDir });
     staged.routesConfig = loadRoutes(join(configDir, 'routes.json'));
 
@@ -118,7 +122,7 @@ export async function install({ refreshExtension = false } = {}) {
     patchAgentHostGate(staged, info);
     patchRuntimeCompat(staged, info);
     writeInstallationManifest(staged, [...applicationFiles(staged), ...treeFiles(staged.cursor2plusDir)]);
-  });
+  }, { log: info, validatePrepared: verifyPreparedInstallation });
 
   console.log('');
   ok('Installation complete!');

@@ -7,6 +7,9 @@ import { isInjectPatched } from './patch-inject.js';
 import { isRuntimeCompatPatched } from './patch-runtime-compat.js';
 import { inspectAlwaysLocalPatch } from './patch-always-local.js';
 import { JOURNAL_FILE } from './transaction.js';
+import { compatibilityState } from './compatibility-state.js';
+import { macOSBundle, inspectMacOSSignature } from './macos-signing.js';
+import { macOSJournal } from './macos-transaction.js';
 
 const version = value => typeof value === 'string' && /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(value) ? value : 'unknown';
 const revision = value => typeof value === 'string' && /^[a-f0-9]{40}(?:-dirty)?$/i.test(value) ? value : 'unknown';
@@ -20,10 +23,13 @@ export async function collectDiagnostics(paths, { configDir = CCURSOR_DIR, reque
     cursorVersion: version(paths?.cursorVersion), installerVersion: version(process.env.CURSOR2PLUS_VERSION),
     installerBuild: revision(process.env.CCURSOR_BUILD_SHA) };
   if (!paths) return report;
+  report.compatibility = compatibilityState(paths, { configDir });
+  const bundle = macOSBundle(paths);
+  report.macOSSignature = bundle ? inspectMacOSSignature(bundle) : { applicable: false };
   const manifest = json(join(paths.appRoot, INSTALLATION_MANIFEST));
   const extension = json(join(paths.cursor2plusDir, 'package.json'));
   report.installation = { recorded: !!manifest, verified: safe(() => { validateInstallation(paths); return !!manifest; }) === true,
-    recoveryPending: existsSync(join(paths.appRoot, JOURNAL_FILE)),
+    recoveryPending: existsSync(join(paths.appRoot, JOURNAL_FILE)) || !!(bundle && existsSync(macOSJournal(bundle))),
     extensionVersion: version(extension?.version), recordedBuild: revision(manifest?.build),
     extensionSha256: safe(() => digest(readFileSync(join(paths.cursor2plusDir, 'dist/extension.js')))) };
   report.patches = {

@@ -14,7 +14,8 @@ import { status } from './status.js';
 import { check } from './check.js';
 import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { patchLocalMode } from './patch-local-mode.js';
-import { recoverInstallation } from './transaction.js';
+import { recoverPlatformInstallation } from './platform-transaction.js';
+import { verifyInstalledApplication } from './verify.js';
 import { restoreBackup } from './backup.js';
 
 async function update() {
@@ -28,6 +29,7 @@ const commands = {
   uninstall,
   update,
   upgrade: update,
+  repair: update,
   status,
   doctor: async () => {
     const index = process.argv.indexOf('--output');
@@ -36,11 +38,17 @@ const commands = {
   },
   recover: async () => {
     const { paths, diagnostic } = findCursorPathsDetailed();
-    if (!paths) throw new Error(formatDiagnostic(diagnostic));
-    recoverInstallation(paths);
+    recoverPlatformInstallation(paths);
     console.log('Installation restored to its previous state.');
   },
   check,
+  verify: async () => {
+    const { paths, diagnostic } = findCursorPathsDetailed();
+    if (!paths) throw new Error(formatDiagnostic(diagnostic));
+    await check(paths);
+    verifyInstalledApplication(paths);
+    console.log('Installed patches, Cursor build and platform signature verified. Run a real Agent task to verify the upstream route.');
+  },
   'local-mode': async () => {
     const info = msg => console.log(`\x1b[34m[>]\x1b[0m ${msg}`);
     const { paths, diagnostic } = findCursorPathsDetailed();
@@ -78,12 +86,14 @@ Commands:
   uninstall        Remove extension and restore all patches
   update           Check compatibility and refresh the extension, preserving configuration
   upgrade          Alias for update
+  repair           Recheck patches and repair macOS signing using the update transaction
   local-mode       Standalone tool: enable Cursor's built-in Local Agent mode
   local-mode-off   Standalone tool: disable Local Agent mode (restore originals)
   doctor           Print a sanitized JSON report (--output NEW_FILE to save)
   recover          Recover an interrupted installation (close Cursor first)
   status           Check current installation status
   check            Dry-run: verify AST patch targets are matchable
+  verify           Read-only: require installed patches, matching build and valid macOS signature
   help             Show this help message
 `);
   },

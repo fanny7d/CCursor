@@ -16,6 +16,9 @@ cursor.db*
 local-access.json
 .ccursor-installation.json
 .ccursor-transaction.json
+installation-receipt.json
+.*.app.ccursor-recovery.json
+.*.app.ccursor-backups/
 *.backup-byok-*
 .ci-sqlite/
 /.github/toolchain/node_modules/

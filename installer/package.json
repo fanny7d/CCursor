@@ -1,7 +1,7 @@
 {
   "name": "@fanny7d/ccursor",
-  "version": "0.1.0",
-  "description": "Cursor++ BYOK Installer — Bring Your Own Key for Cursor IDE",
+  "version": "0.1.1",
+  "description": "Cursor++ BYOK Installer \u2014 Bring Your Own Key for Cursor IDE",
   "type": "module",
   "bin": {
     "ccursor": "dist/cli.cjs"

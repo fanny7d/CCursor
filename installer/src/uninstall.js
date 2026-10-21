@@ -16,7 +16,7 @@
  */
 import { join } from 'path';
 import { rmSync } from 'fs';
-import { withInstallationTransaction } from './transaction.js';
+import { assertPlatformReady, withPlatformTransaction } from './platform-transaction.js';
 import { INSTALLATION_MANIFEST } from './installation-state.js';
 import { findCursorPathsDetailed, formatDiagnostic } from './detect.js';
 import { restoreBackup } from './backup.js';
@@ -42,8 +42,9 @@ export async function uninstall() {
     throw new Error('Cursor installation not found');
   }
   info(`Cursor: ${paths.appRoot}`);
+  assertPlatformReady(paths);
 
-  await withInstallationTransaction(paths, async (staged) => {
+  await withPlatformTransaction(paths, async (staged) => {
     let restored = 0;
     const workbenchHtml = join(staged.appRoot, 'out', 'vs', 'code', 'electron-sandbox', 'workbench', 'workbench.html');
 
@@ -97,7 +98,7 @@ export async function uninstall() {
     } else {
       warn('No backups found (already clean?)');
     }
-  });
+  }, { log: info });
   ok('Uninstallation complete');
   warn('Restart Cursor for changes to take effect.');
 }

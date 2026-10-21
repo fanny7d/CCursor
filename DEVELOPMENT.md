@@ -2,7 +2,7 @@
 
 本仓库基于 [CometixSpace/CCursor](https://github.com/CometixSpace/CCursor) 的
 `fcac85db793fc2c8cda3318b96ec5a41c24f5e26`，保留上游历史及
-AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`，fork 版本 `0.1.0`。
+AGPL-3.0-or-later 许可证。当前二开分支：`fanny7d/cursor-3259-nas`，安装器版本 `0.1.1`，扩展版本 `0.1.0`。
 
 ## 已包含的改动
 
@@ -76,6 +76,10 @@ node dist/cli.cjs check
 node dist/cli.cjs install
 # 更新本 fork 的构建产物（同样先关闭 Cursor 并执行 check）：
 node dist/cli.cjs update
+# 检查已安装状态（包括 macOS 原生签名；官方更新覆盖补丁时退出码非 0）：
+node dist/cli.cjs verify
+# 修复签名或更新后丢失的补丁，等同于完整 update：
+node dist/cli.cjs repair
 # 重启 Cursor 后：
 node dist/cli.cjs status
 # 需要恢复时，关闭 Cursor 后：
@@ -83,7 +87,7 @@ node dist/cli.cjs uninstall
 ```
 
 上游 `npx @cometix/ccursor install` 安装的是上游版本。本 fork 使用本地构建产物。
-完整安装时重复执行 `install` 仍直接返回；修改扩展源码后，重新构建并运行 `update`
+完整安装且签名健康时重复执行 `install` 直接返回；签名失效会进入修复事务。修改扩展源码后，重新构建并运行 `update`
 以更新扩展。`update` 保留已有路由和服务商配置，不先执行卸载。
 安装器先在临时副本准备全部变更，再提交；任何步骤失败时恢复本次变更。
 备份附带 Cursor 版本、vendor build 及 SHA-256；旧版无元数据备份仅在原始 product 备份能证明同一 vendor build 时接纳。
@@ -103,6 +107,18 @@ node dist/cli.cjs recover
 
 恢复日志存在时新安装会拒绝继续。`recover` 从原始快照恢复，不运行新补丁。
 单独的 `local-mode` / `local-mode-off` 仍是独立工具，不纳入主安装事务；启用后应先执行 `local-mode-off` 再卸载主补丁。
+
+### macOS 完整应用事务与官方更新
+
+0.1.1 安装器会拒绝在 Cursor 主进程运行时写入。每次安装、更新或卸载都先复制完整 `.app`，核对原生 Info.plist 与资源目录版本，在副本执行全部补丁，完成本地签名及深度严格校验，再替换应用。准备期间或提交前出现官方更新、配置并发编辑时拒绝覆盖；提交失败会恢复原应用、原生签名和原配置。
+
+签名保留原权限声明和 hardened runtime，仅添加已验证的应用级 `com.apple.security.cs.disable-library-validation`，解决本地签名与原厂 Electron 框架 Team ID 不同的问题。原厂嵌套框架不重新签名，系统级 Gatekeeper / SIP 不改动。未知原生权限形状、附加保护标志或版本不一致会拒绝继续。本地 ad hoc 签名不等于官方 Developer ID 签名或公证。
+
+恢复日志位于 `.app` 的同级目录，避免日志本身破坏资源封装；完整旧应用与原配置保留在同级私有 `.<应用名>.ccursor-backups/<事务 ID>/`，路径会打印。`recover` 也能处理进程在两次 rename 之间退出、当前 `.app` 暂时不存在的情况。保留备份，直到实际 Agent 验收通过；安装器不自动清理历史完整备份。
+
+版本记录写在独立的 `~/.ccursor/installation-receipt.json`，即使官方替换整个应用也保留。`check` 报告更新及逐项 AST 兼容性；`verify` 额外要求补丁完整、版本／构建及文件摘要匹配、macOS 签名健康；`doctor` / `status` 显示兼容与签名状态。没有明确通过的未来 Cursor 版本会在补丁匹配或原生检查失败处中止。
+
+官方更新后运行 `verify`，需要修复时退出 Cursor 并运行 `repair`，然后重启并执行真实 Agent 任务。安装器不驻留后台；这些检查不能证明任意未来 Cursor 版本的 GUI／上游接口都可用，也不代替实际 NAS 请求验收。
 
 开发分支不轮询上游 npm 更新，以免上游安装器覆盖本 fork 的修复。
 后续更新从本仓库获取源码并构建。`npm run package:artifacts` 生成 VSIX、
@@ -131,7 +147,7 @@ api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
 0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，
 见 [`LOCAL_NAS_ACCEPTANCE.md`](LOCAL_NAS_ACCEPTANCE.md)。
 0.1.0 已在真实应用文件副本完成升级／卸载验证，并有本地 HTTP / 协议集成测试；
-0.1.0 已在 macOS ARM64 / Cursor 3.26.13 的原生 Agents UI 完成文件读写、重启恢复及 NAS Max 转发参数验收，见 [`HARDENING_ACCEPTANCE.md`](HARDENING_ACCEPTANCE.md)。其中记录了官方自动更新带来的 macOS 资源签名问题、本机签名修复及其适用边界；安装器尚不自动处理本地签名。
+0.1.0 已在 macOS ARM64 / Cursor 3.26.13 的原生 Agents UI 完成文件读写、重启恢复及 NAS Max 转发参数验收，见 [`HARDENING_ACCEPTANCE.md`](HARDENING_ACCEPTANCE.md)。0.1.1 安装器将当时的本地签名修复与更新后检查纳入完整应用事务；该能力不扩大已验证的 GUI 版本范围。
 私人地址、密钥、完整日志和聊天截图不随源码发布。
 独立 Codex 扩展已卸载，Cursor++ 不依赖它；历史 Codex 兼容脚本未纳入本 fork。
 

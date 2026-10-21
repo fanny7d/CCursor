@@ -7,7 +7,7 @@ import { CCURSOR_DIR } from './routes.js';
 import { digest, INSTALLATION_MANIFEST, validateBackup, validateInstallation } from './installation-state.js';
 
 export const JOURNAL_FILE = '.ccursor-transaction.json';
-const CONFIG_FILES = ['routes.json', 'providers.json', 'web-tools.json', 'models-catalog.json', 'local-access.json'];
+export const CONFIG_FILES = ['routes.json', 'providers.json', 'web-tools.json', 'models-catalog.json', 'local-access.json'];
 
 function inside(root, path) {
   const name = relative(root, path);
