@@ -153,11 +153,12 @@ Grok 的推理选项独立设置，Messages 示例为 `high`，不套用 GPT 的
 使工具续调与重启后的同一聊天保留明确的缓存归属。显式配置的同名请求头仍由用户控制；
 其他 Anthropic 模型及 GPT 请求路径不变。该标识不替代 NAS 的用户和账号隔离。
 
-Sub2API 0.1.173 的 Responses 路由支持请求头
+此前按镜像标签检索到的 Sub2API Responses 路由支持请求头
 `X-Sub2API-Grok-Client-Tool-Cache: off`，用于关闭 Grok Free 的搜索工具自动追加。
 上游 [issue #4486](https://github.com/Wei-Shaw/sub2api/issues/4486) 记录过该路由影响本地工具选择的问题。
 该版本的 Messages 桥接路径未读取此请求头；不要将其当作 Messages 的修复开关。
-本地 Responses 对照仍出现错误结果及违背工具限制，未作为推荐配置保留。
+当时未适配工具目录的 Responses 对照出现错误结果及违背工具限制，未通过验收。
+扩展 0.1.2 的独立适配与后续验收见下节，不覆盖或替换原有 Messages 配置。
 Messages 的 7 轮真实工具读写、两次重启及 NAS 直连验收见
 [`GROK_TOOL_ACCEPTANCE.md`](GROK_TOOL_ACCEPTANCE.md)。
 两条路径均不能保证模型每次正确调用工具或计算无误，需使用每轮新建且不可预测的文件、
@@ -177,6 +178,9 @@ Messages 的 7 轮真实工具读写、两次重启及 NAS 直连验收见
 保留原有服务商对象和路由。不要默认加入 `X-Sub2API-Grok-Client-Tool-Cache: off`；该开关的效果应单独验证。
 NAS 容器的镜像版本标签可能与实际二进制不一致，排查模型和 effort 能力时应核对二进制构建提交、
 实际用量记录和出站请求，不能只按镜像标签选择源码。
+
+0.1.2 的真实 Responses 算术、工具调用、历史恢复、重启和 NAS 直连，以及原有 Messages / GPT Max 回归，
+见 [`GROK_RESPONSES_ACCEPTANCE.md`](GROK_RESPONSES_ACCEPTANCE.md)。
 
 ## 验收边界
 
