@@ -144,17 +144,22 @@ api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
 
 ## Sub2API Grok 工具调用
 
-Grok 可使用独立的 `openai-responses` 服务商直连 Sub2API `/v1`，参考
+Grok 使用独立的 `anthropic` 服务商接入 Sub2API `/v1/messages`（baseUrl 填主机根地址），参考
 [`examples/providers.grok.example.json`](examples/providers.grok.example.json)。
-添加服务商时保留原有 GPT 服务商、路由及 Max 配置，使用具有 Grok 分组权限的已有密钥。
-Grok 的推理选项独立设置，示例为 `xhigh`。
+保留原有 GPT 服务商、路由及 Max 配置，使用具有 Grok 分组权限的已有密钥。
+Grok 的推理选项独立设置，Messages 示例为 `high`，不套用 GPT 的 Max。
+
+扩展 0.1.1 对 Messages 协议中的 `grok-*` 模型自动发送会话级 `X-Grok-Conv-Id`，
+使工具续调与重启后的同一聊天保留明确的缓存归属。显式配置的同名请求头仍由用户控制；
+其他 Anthropic 模型及 GPT 请求路径不变。该标识不替代 NAS 的用户和账号隔离。
 
 Sub2API 0.1.173 的 Responses 路由支持请求头
 `X-Sub2API-Grok-Client-Tool-Cache: off`，用于关闭 Grok Free 的搜索工具自动追加。
 上游 [issue #4486](https://github.com/Wei-Shaw/sub2api/issues/4486) 记录过该路由影响本地工具选择的问题。
-该请求头只影响此服务商请求，不修改 NAS 账号或全局配置；该版本的 Messages 桥接路径未读取此请求头。
-Responses 适配器会发送会话级 `prompt_cache_key` 并保留推理项和工具调用历史。
-这并不保证模型每次都调用工具，需使用每轮新建且不可预测的文件、独立核对结果，并验证重启后的续聊。
+该版本的 Messages 桥接路径未读取此请求头；不要将其当作 Messages 的修复开关。
+本地 Responses 对照仍出现错误结果及违背工具限制，未作为推荐配置保留。
+两条路径均不能保证模型每次正确调用工具或计算无误，需使用每轮新建且不可预测的文件、
+独立核对结果，并验证重启后的续聊。
 
 扩展 0.1.1 会拒绝 Add File 中缺少 `+` 前缀的错误补丁，返回可重试的格式错误，
 更新和删除补丁也必须完整符合单文件格式，避免静默丢弃内容后将空文件、部分写入或部分删除误报为成功。

@@ -45,6 +45,7 @@ function mapThinkingLevelToAnthropicEffort(level: NonNullable<LLMStreamRequest['
 export class AnthropicProvider implements LLMProvider {
     readonly name = 'anthropic';
     private client: Anthropic;
+    private hasCustomGrokConversationHeader: boolean;
 
     constructor(entry: ProviderEntry) {
         const opts: ConstructorParameters<typeof Anthropic>[0] = {};
@@ -65,6 +66,8 @@ export class AnthropicProvider implements LLMProvider {
             opts.defaultHeaders = headers;
         }
 
+        this.hasCustomGrokConversationHeader = Object.keys(entry.headers ?? {})
+            .some(name => name.toLowerCase() === 'x-grok-conv-id');
         this.client = new Anthropic(opts);
     }
 
@@ -133,9 +136,18 @@ export class AnthropicProvider implements LLMProvider {
         if (request.anthropicBetas)
             betas.push(...request.anthropicBetas.filter(b => !betas.includes(b)));
 
+        // Sub2API's Messages→Grok bridge otherwise infers cache affinity from
+        // prompt text. Keep tool continuations on their actual Cursor chat id,
+        // including after restart; do not change other models or custom headers.
+        const requestOptions = {
+            signal: request.signal,
+            ...(request.model.toLowerCase().startsWith('grok-') && request.conversationId && !this.hasCustomGrokConversationHeader
+                ? { headers: { 'X-Grok-Conv-Id': request.conversationId } }
+                : {}),
+        };
         const stream = betas.length > 0
-            ? this.client.beta.messages.stream({ ...params, betas } as any, { signal: request.signal })
-            : this.client.messages.stream(params, { signal: request.signal });
+            ? this.client.beta.messages.stream({ ...params, betas } as any, requestOptions)
+            : this.client.messages.stream(params, requestOptions);
         const contentBlocks = new Map<number, { type: string; id?: string; name?: string; signature?: string }>();
 
         for await (const event of stream) {

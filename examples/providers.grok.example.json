@@ -1,17 +1,16 @@
 {
   "providers": [
     {
-      "id": "nas-grok-responses",
+      "id": "nas-grok-messages",
       "name": "NAS Grok",
-      "type": "openai-responses",
-      "baseUrl": "https://nas.example.com/v1",
+      "type": "anthropic",
+      "baseUrl": "https://nas.example.com",
       "auth": {
         "kind": "apiKey",
         "value": "REPLACE_WITH_YOUR_GROK_GROUP_API_KEY"
       },
       "headers": {
-        "User-Agent": "CursorPlus-NAS/0.0.15",
-        "X-Sub2API-Grok-Client-Tool-Cache": "off"
+        "User-Agent": "CursorPlus-NAS/0.0.15"
       },
       "models": [
         {
@@ -19,19 +18,19 @@
           "apiModel": "grok-4.7",
           "displayName": "Fanny7d Grok 4.7",
           "thinking": true,
-          "thinkingLevel": "xhigh",
+          "thinkingLevel": "high",
           "parameters": {
-            "reasoning": [
+            "thinking": true,
+            "effort": [
               "low",
               "medium",
-              "high",
-              "xhigh"
+              "high"
             ]
           },
           "supportsAgent": true,
           "supportsImages": true,
           "contextTokenLimit": 200000,
-          "maxOutputTokens": 16384,
+          "maxOutputTokens": 8192,
           "defaultOn": true
         }
       ]
