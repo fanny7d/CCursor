@@ -23,6 +23,28 @@
 
 安装器测试覆盖原竞态、成功结果处理、正常解析、非零退出、真正挂起、一次性等待上限、其他平台行为、重复安装、变更后拒绝修改及精确 checksum 回滚。当前安装包的真实函数也完成修补前后隔离对照。本地 89 项安装器测试全部通过（含真实 renderer 副本的既有兼容检查），新增 checksum 精确恢复与事务提交失败恢复验证。
 
-真实安装、重新启动及 NAS / Messages / GPT Max 的后续验收结果将在验证完成后补充。现有 Grok Responses 的复杂任务限制见 [GROK_UPSTREAM_INVESTIGATION.md](GROK_UPSTREAM_INVESTIGATION.md)。
+## 实际安装与启动复验
+
+- 已使用安装器 0.1.6 完整事务更新当前 Cursor。主进程代码、备份和安装清单校验通过，macOS 签名有效，hardened runtime 保留，Gatekeeper 未变。
+- 本次仅构建安装器，扩展 0.1.4 的二进制 SHA-256 与修复前完全一致；运行时仍为原来的扩展构建，不改变 Agent 的请求转换或工具执行实现。
+- 用户本人处理重签后的钥匙串授权。该次实际启动恢复正常界面，主日志无 shell 环境超时错误。
+- 在安装后的真实 Cursor 上重放同样的 12 秒主进程暂停，恢复前环境子进程同样已结束待回收。修复后主日志无 shell 环境超时错误，界面可输入；修复前相同条件会出现该错误并传播至终端、MCP 和路径检查。
+
+## 普通启动、通道与配置保护
+
+- 再次正常退出并普通启动，不注入暂停。超过原超时阈值并完成原生 Agent 任务后，主日志仍无 shell 环境解析错误，界面保持 `Fanny7d GPT-6-Luna Max`。
+- 原生 GPT Max 实际执行 ReadFile → ApplyPatch → ReadFile，随机输入的 nonce、总和和状态全部匹配；额外真实执行只读 Shell 命令，退出码 0，成功解析 node、pnpm、git。不是仅检查安装产物或隐藏告警。
+- NAS 侧参数采集正常结束，捕获的 5 个请求全部为 `gpt-6-luna` / `reasoning.effort=max`。
+- Messages 使用明确绝对路径完成 Read → Write → Read，nonce、中文与 emoji 字段原样一致。只证明这项实际读写能力，不能扩大为 Grok 所有任务通过。
+- providers.json 的全部三个服务商、routes.json、Cursor 用户设置、独立 Codex 配置和认证文件、NAS api2cursor 设置文件均与本轮基线字节一致。用户 shell 初始化配置未修改，没有更改或重启 NAS 服务。
+
+## 额外发现的 Grok Messages 失败
+
+保留了两项未通过的验收，不放宽断言或混入成功统计：
+
+1. Messages 实际读取 `[96,53,91]` 后，把总和写成 200，而独立核算为 240；nonce 与读写链路正常，数学结果失败。
+2. 相对路径复制任务中，已提供正确工作区路径，但模型将终端日志目录当作工作区，随后查找不存在的文件并尝试不被任务允许的 Shell；任务已停止，交付物不存在。使用另一个全新 nonce、明确绝对路径的独立读写用例通过，不将其算作原失败用例修复。
+
+这些失败的工具参数和结果保留在私人证据中。本次没有修改 Messages 的服务商配置、提示词、模型或扩展执行代码，也不将启动修复宣称为 Grok 算术或任务规划修复。现有 Grok Responses 复杂任务限制见 [GROK_UPSTREAM_INVESTIGATION.md](GROK_UPSTREAM_INVESTIGATION.md)。
 
 参考：[VS Code 环境解析实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/shell/node/shellEnv.ts)、[Node.js 事件循环与计时器](https://nodejs.org/learn/asynchronous-work/event-loop-timers-and-nexttick)。

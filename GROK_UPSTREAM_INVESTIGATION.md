@@ -49,3 +49,5 @@
 - 新版安装后，Messages 的新 nonce 文件 Read → Write → Read 通过，数字总和 201 与预期一致。
 - GPT-6-Luna Max 的新 nonce 文件 ReadFile → ApplyPatch → ReadFile 通过，总和 152 与预期一致；NAS 请求参数采集正常结束，捕获的请求全部为 `gpt-6-luna` / `reasoning.effort=max`。最终界面保持 `Fanny7d GPT-6-Luna Max`。
 - 全部三个服务商的 providers.json、routes.json、Cursor 用户设置、独立 Codex 配置与认证文件，以及 NAS api2cursor 设置文件均与本轮基线字节一致。未保留任何缓存关闭、串行或简化提示词实验配置，未添加临时转发代理，没有更改 NAS 服务。
+
+后续 shell 启动修复验收还发现 Grok Messages 的算术与相对路径选择失败，详见 [SHELL_STARTUP_ACCEPTANCE.md](SHELL_STARTUP_ACCEPTANCE.md)；此前读写用例通过不代表所有 Grok 任务稳定。
