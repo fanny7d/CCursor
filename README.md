@@ -1,4 +1,4 @@
-> **NAS fork — installer 0.1.4 / extension 0.1.3:** quit Cursor and use this fork's `update` to check compatibility and sign the macOS application transactionally. After an official Cursor update, run `verify`; if it fails, quit Cursor and run `repair`. See [DEVELOPMENT.md](DEVELOPMENT.md).
+> **NAS fork — installer 0.1.5 / extension 0.1.4:** quit Cursor and use this fork's `update` to check compatibility and sign the macOS application transactionally. After an official Cursor update, run `verify`; if it fails, quit Cursor and run `repair`. See [DEVELOPMENT.md](DEVELOPMENT.md).
 
 > **fanny7d development fork** — Cursor 3.25.9 / NAS BYOK compatibility fixes, with the upstream AGPL-3.0-or-later license retained. See [DEVELOPMENT.md](DEVELOPMENT.md) for build/install instructions and [the provider example](examples/providers.nas.example.json).
 

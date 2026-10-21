@@ -4,12 +4,12 @@ import type { ToolRegistryEntry } from '../types'
 
 export const CALCULATE_TOOL: LLMTool = {
   name: 'Calculate',
-  description: 'Compute exact arithmetic locally, without Shell, filesystem, network, or code execution. Use this for numeric results instead of mental arithmetic. Supply decimal operands as strings when precision matters. Operations apply left-to-right. The result is an exact decimal string, or a fraction for repeating decimals.',
+  description: 'Compute exact arithmetic locally, without Shell, filesystem, network, or code execution. Use this for numeric results instead of mental arithmetic. Supply plain decimal operands as strings when precision matters; expressions such as "7 * 0.07" are not operands. For dependent calculations, wait for the earlier tool result before using it in a later call. Operations apply left-to-right. The result is an exact decimal string, or a fraction for repeating decimals.',
   inputSchema: {
     type: 'object',
     properties: {
       operation: { type: 'string', enum: ['sum', 'subtract', 'multiply', 'divide'] },
-      operands: { type: 'array', minItems: 1, maxItems: 100, items: { anyOf: [{ type: 'number' }, { type: 'string', maxLength: 80 }] } },
+      operands: { type: 'array', minItems: 1, maxItems: 100, items: { anyOf: [{ type: 'number' }, { type: 'string', maxLength: 80, pattern: '^-?\\d+(?:\\.\\d{1,30})?$' }] } },
     },
     required: ['operation', 'operands'],
     additionalProperties: false,

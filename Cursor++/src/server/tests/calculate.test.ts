@@ -8,7 +8,7 @@ import { partitionCursorBuiltinTools } from '../handlers/agent/dynamicTools'
 import { createEphemeralSession } from '../handlers/agent/session'
 import { calculate } from '../handlers/agent/toolkit/definitions/Calculate'
 import { runToolCall } from '../handlers/agent/toolRuntime'
-import { encodeResponsesInput } from '../handlers/llm/conversationCodec'
+import { encodeResponsesInput, encodeResponsesTools } from '../handlers/llm/conversationCodec'
 import { resolveProviderRuntime } from '../handlers/llm/providerRuntime'
 import { openAIStateStrategy } from '../handlers/llm/stateStrategy'
 import { transformMessages } from '../handlers/llm/transformMessages'
@@ -49,6 +49,7 @@ it.each([
   { operation: 'sum', operands: [] },
   { operation: 'sum', operands: Array.from({ length: 101 }).fill(1) },
   { operation: 'sum', operands: ['process.exit()'] },
+  { operation: 'sum', operands: ['7.0 * 0.07', '3.0 * 10.01', '9.0 * 1.2'] },
   { operation: 'sum', operands: ['1e10000'] },
   { operation: 'sum', operands: [Number.POSITIVE_INFINITY] },
   { operation: 'sum', operands: [9007199254740992] },
@@ -56,6 +57,25 @@ it.each([
   { operation: 'multiply', operands: Array.from({ length: 20 }, () => '9'.repeat(80)) },
 ])('rejects unsafe, invalid or excessive arithmetic %#', (input) => {
   expect(() => calculate(input)).toThrow()
+})
+
+it('carries decimal constraints onto the Grok Responses wire instead of advertising expression operands', () => {
+  const tools = encodeResponsesTools(resolveProviderRuntime('grok-response-tests').listRuntimeTools())!
+  const tool = tools.find(t => t.type === 'function' && t.name === 'Calculate')!
+  const parameters = ('parameters' in tool ? tool.parameters : {}) as {
+    properties: { operands: { items: { anyOf: Array<{ type: string, pattern?: string }> } } }
+  }
+  const schema = parameters.properties.operands.items.anyOf.find(s => s.type === 'string')!
+  expect(schema.pattern).toBeTypeOf('string')
+  const pattern = new RegExp(schema.pattern!)
+  for (const operand of ['0.07', '-1.25', '9007199254740993', `0.${'1'.repeat(30)}`]) {
+    expect(pattern.test(operand)).toBe(true)
+    expect(() => calculate({ operation: 'sum', operands: [operand] })).not.toThrow()
+  }
+  for (const operand of ['7.0 * 0.07', '1e3', '1/3', `0.${'1'.repeat(31)}`]) {
+    expect(pattern.test(operand)).toBe(false)
+    expect(() => calculate({ operation: 'sum', operands: [operand] })).toThrow()
+  }
 })
 
 it('isolates Grok tools and prompt from Responses transport and existing Messages/GPT profiles', () => {
