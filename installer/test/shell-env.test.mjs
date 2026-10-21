@@ -11,6 +11,13 @@ import { shellEnvSource } from './fixtures/shell-env.mjs';
 
 async function execute({ patched = true, block = false, hang = false, platform = 'darwin', exit = 0 } = {}) {
   const children = [], traces = [], cancelled = [];
+  const timers = new Map();
+  const schedule = (callback, delay) => {
+    const handle = setTimeout(() => { timers.delete(handle); callback(); }, delay);
+    timers.set(handle, callback);
+    return handle;
+  };
+  const unschedule = handle => { timers.delete(handle); clearTimeout(handle); };
   class CancellationSource {
     constructor() { this.token = {}; }
     dispose(cancel) {
@@ -18,7 +25,7 @@ async function execute({ patched = true, block = false, hang = false, platform =
     }
   }
   const context = {
-    process: { platform }, performance, setTimeout, clearTimeout, CancellationSource,
+    process: { platform }, performance, setTimeout: schedule, clearTimeout: unschedule, CancellationSource,
     spawnShell: () => new Promise((resolve, reject) => {
       const code = hang ? 'setInterval(()=>{},1000)' : `process.stdout.write('resolved');process.exitCode=${exit}`;
       const child = spawn(process.execPath, ['-e', code], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -33,9 +40,21 @@ async function execute({ patched = true, block = false, hang = false, platform =
   const start = performance.now();
   const result = run({ getValue: () => block || hang ? 1 : 3 }, { trace: (...args) => traces.push(args) }, {}, {})
     .then(env => ({ ok: true, env }), error => ({ ok: false, error: error.message }));
-  if (block) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2200);
+  if (block) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2200);
+    // Exercise the problematic, permitted ordering explicitly. Windows can
+    // drain child close before overdue timers; relying on host ordering would
+    // accidentally skip the regression. The child and elapsed time stay real.
+    assert.equal(timers.size, 1, 'resolver deadline must still be pending during the stall');
+    const [handle, callback] = timers.entries().next().value;
+    unschedule(handle);
+    callback();
+  }
   try { return { ...await result, seconds: (performance.now() - start) / 1000, traces, cancelled }; }
-  finally { for (const child of children) child.kill(); }
+  finally {
+    for (const child of children) child.kill();
+    for (const handle of timers.keys()) unschedule(handle);
+  }
 }
 
 test('reproduces the original false timeout after the parent event loop stalls despite a completed child', async () => {
