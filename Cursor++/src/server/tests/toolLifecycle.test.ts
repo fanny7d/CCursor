@@ -248,6 +248,32 @@ it('runToolCall edit tool uses client readResult before writeArgs', async () => 
   expect(roundContext.pendingToolResults[0].content).toContain('hello\nnew\n')
 })
 
+it.each([
+  '*** Begin Patch\n*** Add File: /workspace/report.json\n{"total":42}\n*** End Patch',
+  '*** Begin Patch\n*** Add File: /workspace/report.json\n+{"total":42}\nnot a patch line\n*** End Patch',
+  '*** Begin Patch\n*** Add File: /workspace/report.json\n+{"total":42}\n*** Add File: /workspace/other.txt\n+unexpected\n*** End Patch',
+])('runToolCall rejects malformed Add File content without issuing filesystem operations (%#)', async (patch) => {
+  const roundContext = createTestRoundContext(anthropicStateStrategy)
+  const frames: AgentServerMessage[] = []
+  let execId = 0
+  for await (const frame of runToolCall({
+    toolCall: { callId: 'call-invalid-add', name: 'ApplyPatch', input: { patch } },
+    availableMcpTools: [],
+    conversationId: 'conv-invalid-add',
+    currentModelId: 'gpt-5',
+    round: 0,
+    session: createEphemeralSession('invalid-add'),
+    roundContext,
+    messages: [],
+    allocateExecMessageId: () => ++execId,
+    allocateInteractionId: () => 1,
+  })) frames.push(frame)
+  expect(frames.filter(frame => frame.message.case === 'execServerMessage')).toHaveLength(0)
+  expect(roundContext.pendingToolResults).toHaveLength(1)
+  expect(roundContext.pendingToolResults[0].isError).toBe(true)
+  expect(roundContext.pendingToolResults[0].content).toContain('prefix every Add File content line with +')
+})
+
 it('runToolCall ApplyPatch Add File fails when client readResult says target exists', async () => {
   const session = createEphemeralSession('applypatch-add-exists')
   pushSessionMessage(session, {

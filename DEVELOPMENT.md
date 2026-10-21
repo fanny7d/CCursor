@@ -142,6 +142,23 @@ api2cursor 协议修复属于另一个仓库，本仓库不包含其源码。
 强制模型映射或请求体模板仍可能覆盖它们。接其他 API 时，分别验证流式输出、工具调用、
 工具结果回传、上下文恢复和最终推理参数。
 
+## Sub2API Grok 工具调用
+
+Grok 可使用独立的 `openai-responses` 服务商直连 Sub2API `/v1`，参考
+[`examples/providers.grok.example.json`](examples/providers.grok.example.json)。
+添加服务商时保留原有 GPT 服务商、路由及 Max 配置，使用具有 Grok 分组权限的已有密钥。
+Grok 的推理选项独立设置，示例为 `xhigh`。
+
+Sub2API 0.1.173 的 Responses 路由支持请求头
+`X-Sub2API-Grok-Client-Tool-Cache: off`，用于关闭 Grok Free 的搜索工具自动追加。
+上游 [issue #4486](https://github.com/Wei-Shaw/sub2api/issues/4486) 记录过该路由影响本地工具选择的问题。
+该请求头只影响此服务商请求，不修改 NAS 账号或全局配置；该版本的 Messages 桥接路径未读取此请求头。
+Responses 适配器会发送会话级 `prompt_cache_key` 并保留推理项和工具调用历史。
+这并不保证模型每次都调用工具，需使用每轮新建且不可预测的文件、独立核对结果，并验证重启后的续聊。
+
+扩展 0.1.1 会拒绝 Add File 中缺少 `+` 前缀的错误补丁，返回可重试的格式错误，
+避免静默丢弃内容后将空文件或部分文件误报为写入成功。
+
 ## 验收边界
 
 0.0.15 的真实 UI 验收涵盖聊天、文件读写、原生搜索、公式显示、重启恢复及 Max 上游参数，

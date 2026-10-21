@@ -45,11 +45,16 @@ export function parsePatch(patch: string): ParsedPatch | null {
   // *** Add File: <path>
   if (headerLine.startsWith('*** Add File: ')) {
     const path = headerLine.slice('*** Add File: '.length).trim()
+    if (!path)
+      return null
     const addLines: string[] = []
     for (let j = 1; j < bodyLines.length; j++) {
       const line = bodyLines[j]
-      if (line.startsWith('+'))
-        addLines.push(line.slice(1))
+      // Never silently discard malformed content or a second file section:
+      // that would report a successful write while creating an empty/partial file.
+      if (!line.startsWith('+'))
+        return null
+      addLines.push(line.slice(1))
     }
     return { action: 'add', path, addContents: addLines.join('\n') + '\n' }
   }
@@ -444,7 +449,7 @@ export const ApplyPatchTool: ToolRegistryEntry = {
     const patchStr = getPatchString(input)
     const parsed = parsePatch(patchStr)
     if (!parsed)
-      throw new Error('Failed to parse patch: invalid format')
+      throw new Error('Failed to parse patch: invalid format. Include one file per call and prefix every Add File content line with +.')
     return { path: parsed.path }
   },
   buildExecArgs: (input, callId, options) => {
@@ -460,7 +465,7 @@ export const ApplyPatchTool: ToolRegistryEntry = {
     const patchStr = getPatchString(input)
     const parsed = parsePatch(patchStr)
     if (!parsed)
-      throw new Error('Failed to parse patch: invalid format')
+      throw new Error('Failed to parse patch: invalid format. Include one file per call and prefix every Add File content line with +.')
     // streamContent = patch 格式内容（用于 editToolCallDelta）
     const normalizedPatchStr = patchStr.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     const patchBody = normalizedPatchStr
